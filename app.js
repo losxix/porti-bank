@@ -113,6 +113,7 @@ const SFX={
   undo(){tone(660,0,.14,"sine",.13,330)},
   broke(){[392,370,349,262].forEach((f,i)=>tone(f,i*.18,.24,"sawtooth",.06))},
   sync(){tone(784,0,.12,"sine",.1);tone(1175,.1,.25,"sine",.1)},
+  chomp(){[0,.32,.64,.96].forEach((t,i)=>{noise(t,.09,.14);tone(170-i*12,t,.16,"square",.09,90)});noise(1.25,.08,.1);tone(1320,1.27,.12,"triangle",.12);tone(1760,1.35,.4,"sine",.14)},
   err(){tone(180,0,.18,"square",.07)}
 };
 function play(k){
@@ -275,6 +276,8 @@ function announceJoin(rows){
 function announce(news){
   const me=L.me;if(!me)return;
   const D=derive(),boss=iAmBanker();
+  const eaten=news.filter(r=>r._new&&paysBank(r)&&(r.status||"aprovado")==="aprovado"&&r.lancado_por!==me);
+  if(eaten.length){const r=eaten[eaten.length-1];bancoComeu(nameOf(r.de,D),r.valor)}
   const asks=news.filter(r=>r._new&&r.status==="pendente"&&boss&&r.lancado_por!==me);
   const mine=news.filter(r=>!asks.includes(r)&&(r.de===me||r.para===me));
   if(asks.length){
@@ -501,6 +504,21 @@ function toast(text,action){
   el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,action?6000:3200);
 }
 function flashCard(){const c=$("#card");if(!c)return;c.classList.remove("flash");void c.offsetWidth;c.classList.add("flash")}
+
+/* ---------- "O banco comeu" ---------- */
+let eatT;
+function bancoComeu(nome,valor){
+  const el=$("#eat");
+  $("#eatText").textContent=nome+" pagou "+money(valor)+" ao banco";
+  const bills=el.querySelector(".bills");
+  bills.innerHTML=Array.from({length:16},(_,i)=>`<i class="${i%3?"":"c"}" style="left:${Math.round(Math.random()*92)}%;animation-delay:${(Math.random()*.9).toFixed(2)}s;--r:${Math.round(Math.random()*500-250)}deg"></i>`).join("");
+  el.hidden=true;void el.offsetWidth;el.hidden=false;
+  el.querySelectorAll("*").forEach(n=>{n.style.animation="none";void n.offsetWidth;n.style.animation=""});
+  clearTimeout(eatT);eatT=setTimeout(()=>el.hidden=true,2600);
+  play("chomp");
+}
+$("#eat").addEventListener("click",()=>{$("#eat").hidden=true;clearTimeout(eatT)});
+const paysBank=r=>!!r.de&&!r.para&&r.motivo!=="Ajuste de saldo";
 
 /* ---------- actions ---------- */
 function lancar(de,para,valor,motivo){
@@ -745,6 +763,7 @@ $("#shGo").onclick=()=>{
   closeSheets();
   if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(SH.kind==="salary"?L.mesa.salario:amt),{label:"Cancelar",run:()=>estornar(r.id)});return}
   const after=balances(derive())[a];
+  if(SH.kind==="pay"&&SH.to==="bank"){bancoComeu(an,amt);toast(msg,{label:"Desfazer",run:()=>estornar(r.id)});return}
   if(before>=0&&after<0){play("broke");toast(an+" ficou no vermelho!",{label:"Desfazer",run:()=>estornar(r.id)})}
   else{play(snd);toast(msg,{label:"Desfazer",run:()=>estornar(r.id)})}
   if(!proxy&&SH.kind!=="pay")flashCard();

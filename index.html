@@ -11,6 +11,7 @@
 <title>PORTI BANK</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
+<link rel="preload" href="logo.webp" as="image">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -51,6 +52,9 @@ p{margin:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .mark{display:flex;align-items:center;gap:10px;min-width:0}
 .globe{width:34px;height:34px;color:var(--accent);flex:none}
+.logo{width:56px;height:auto;flex:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}
+.biglogo{width:min(64vw,250px);height:auto;align-self:center;filter:drop-shadow(0 10px 22px rgba(0,0,0,.22));animation:logoin .7s cubic-bezier(.2,1.4,.4,1)}
+@keyframes logoin{from{transform:scale(.7) rotate(-6deg);opacity:0}}
 .word{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:.04em;line-height:1}
 .sub{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:5px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
@@ -241,6 +245,19 @@ label{font-size:13px;font-weight:600;color:var(--muted);display:flex;flex-direct
 .calcres span{font-family:var(--mono);font-weight:600;font-size:15px;min-width:0}
 .calcres .btn{width:auto;padding:11px 20px}
 
+/* "O banco comeu": shown on every phone when someone pays the bank */
+.eat{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:color-mix(in oklab,#050a18 62%,transparent);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);overflow:hidden;animation:eatfade 2.6s ease forwards}
+.eat-in{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0 16px;animation:eatpop 2.6s cubic-bezier(.2,1.4,.4,1) forwards}
+.eat img{width:min(78vw,360px);height:auto;filter:drop-shadow(0 18px 30px rgba(0,0,0,.45));animation:eatchomp .32s ease-in-out .45s 4 alternate}
+.eat p{margin:0;color:#fff;font-family:var(--display);font-weight:800;font-size:clamp(18px,5.4vw,24px);text-align:center;text-shadow:0 2px 0 #0F1A35,0 4px 14px rgba(0,0,0,.6);text-wrap:balance;max-width:min(92vw,420px)}
+.bills i{position:absolute;top:-60px;width:46px;height:24px;border-radius:4px;background:linear-gradient(135deg,#9fe2d8,#62b8c9);box-shadow:inset 0 0 0 2px rgba(255,255,255,.55);animation:billfall 1.6s linear forwards}
+.bills i.c{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe9a3,#e0a52a 60%,#b9861f)}
+@keyframes eatfade{0%{opacity:0}8%{opacity:1}82%{opacity:1}100%{opacity:0}}
+@keyframes eatpop{0%{transform:scale(.15) rotate(-18deg)}22%{transform:scale(1.1) rotate(5deg)}32%{transform:scale(.96) rotate(-2deg)}42%{transform:scale(1) rotate(0)}84%{transform:scale(1)}100%{transform:scale(1.06) translateY(-16px)}}
+@keyframes eatchomp{from{transform:scale(1,1) rotate(0)}to{transform:scale(1.06,.94) rotate(-2deg)}}
+@keyframes billfall{to{transform:translateY(115vh) rotate(var(--r,240deg))}}
+@media (prefers-reduced-motion: reduce){.eat,.eat-in,.eat img,.bills i{animation:none!important}.bills{display:none}}
+
 /* sound button states */
 .iconbtn.off{color:var(--muted)}
 .iconbtn.locked{border-color:var(--gold);color:var(--gold);position:relative}
@@ -267,7 +284,7 @@ label{font-size:13px;font-weight:600;color:var(--muted);display:flex;flex-direct
 <div class="wrap">
   <header class="top">
     <div class="mark">
-      <svg class="globe"><use href="#globe"/></svg>
+      <img class="logo" src="logo.webp" alt="Porti Bank" width="56" height="54">
       <div style="min-width:0">
         <div class="word">PORTI BANK</div>
         <div class="sub" id="status"><span class="dot"></span><span>Edição Mundo</span></div>
@@ -286,7 +303,7 @@ label{font-size:13px;font-weight:600;color:var(--muted);display:flex;flex-direct
   <section id="vHome" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="hero">
-        <svg class="big"><use href="#globe"/></svg>
+        <img class="biglogo" src="logo.webp" alt="Porti Bank" width="520" height="499">
         <h1>O banco da sua mesa</h1>
         <p>Cada jogador usa o próprio celular como cartão. Sem cadastro: um cria a mesa e os outros entram com o código.</p>
       </div>
@@ -396,6 +413,7 @@ label{font-size:13px;font-weight:600;color:var(--muted);display:flex;flex-direct
   <p class="muted" style="font-size:14px">Quem receber o banco passa a aprovar os pedidos de dinheiro do banco.</p>
   <div class="claim" id="bankList"></div>
 </div>
+<div class="eat" id="eat" hidden aria-live="polite"><div class="eat-in"><img src="banco-comeu.webp" alt="O banco comeu" width="640" height="640"><p id="eatText"></p></div><div class="bills" aria-hidden="true"></div></div>
 <div class="toast" id="toast" hidden role="status"><span id="toastText"></span><button id="toastBtn" hidden></button></div>
 
 <script src="config.js"></script>
