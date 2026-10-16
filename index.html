@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0F1A35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PORTI BANK">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PORTI BANK</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one-column phone app. Wordmark header with live status, the player's world card, actions, privacy switch, ranking, statement. Sheets slide up from the bottom. */
+:root{
+  --bg:#ECEFF5; --surface:#FFFFFF; --ink:#0F1A35; --muted:#5A6684; --line:#D6DCE8;
+  --accent:#1D4ED8; --accent-ink:#FFFFFF; --gold:#C98A12; --soft:#E1E7F4; --neg:#C2362C; --pos:#0F8A5F;
+  --display:"Unbounded","Avenir Next",system-ui,sans-serif;
+  --body:"Instrument Sans","Helvetica Neue",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:16px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#080E1F; --surface:#111A31; --ink:#E7ECF8; --muted:#8E9AB8; --line:#222D4A;
+  --accent:#7C9DFF; --accent-ink:#071026; --gold:#F0BE57; --soft:#18223D; --neg:#F27D73; --pos:#45C796; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:calc(14px + env(safe-area-inset-top,0px));padding-bottom:calc(120px + env(safe-area-inset-bottom,0px));
+  background-image:radial-gradient(circle at 1px 1px,color-mix(in oklab,var(--ink) 9%,transparent) 1px,transparent 0);background-size:18px 18px;
+  -webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+.wrap{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+p{margin:0}
+.muted{color:var(--muted)}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mark{display:flex;align-items:center;gap:10px;min-width:0}
+.globe{width:34px;height:34px;color:var(--accent);flex:none}
+.word{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:.04em;line-height:1}
+.sub{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:5px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.dot.on{background:var(--pos);box-shadow:0 0 0 3px color-mix(in oklab,var(--pos) 25%,transparent)}
+.dot.warn{background:var(--gold);box-shadow:0 0 0 3px color-mix(in oklab,var(--gold) 25%,transparent);animation:blink 1.2s infinite}
+.dot.bad{background:var(--neg)}
+@keyframes blink{50%{opacity:.35}}
+.tools{display:flex;gap:8px;flex:none}
+.iconbtn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;flex:none}
+.iconbtn svg{width:20px;height:20px}
+.pill{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 14px;height:40px;font-weight:600;font-size:13px;flex:none}
+.link{background:none;border:0;color:var(--accent);font-weight:600;font-size:14px;padding:8px 0}
+h1{font-family:var(--display);font-size:28px;line-height:1.12;margin:0;text-wrap:balance;font-weight:700;letter-spacing:-.01em}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 10px;font-weight:700}
+.banner{background:var(--soft);border-radius:var(--r);padding:14px;font-size:14px;border:1px solid var(--line)}
+.banner.bad{border-color:var(--neg);background:color-mix(in oklab,var(--neg) 10%,var(--surface))}
+.banner.warn{border-color:var(--gold);background:color-mix(in oklab,var(--gold) 12%,var(--surface))}
+
+/* card */
+.card{position:relative;aspect-ratio:1.586;max-width:100%;border-radius:20px;padding:20px 22px;color:#fff;overflow:hidden;isolation:isolate;
+  display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 24px 40px -22px rgba(6,14,40,.65),0 2px 0 rgba(255,255,255,.15) inset}
+.card .gl{position:absolute;right:-22%;top:-30%;width:90%;height:auto;aspect-ratio:1;opacity:.16;z-index:-1}
+.card::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.18) 45%,transparent 60%);transform:translateX(-60%);animation:sheen 6s ease-in-out infinite}
+@keyframes sheen{0%,70%{transform:translateX(-70%)}100%{transform:translateX(70%)}}
+.card.darktext{color:#221a05}
+.card .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cw{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.06em}
+.tier{font-size:10px;letter-spacing:.22em;font-weight:700;opacity:.85;border:1px solid currentColor;border-radius:999px;padding:3px 8px}
+.chiprow{display:flex;align-items:center;gap:12px}
+.chip{width:40px;height:30px;border-radius:7px;background:linear-gradient(135deg,#f6e3a1,#c79d3e 60%,#e9cf86);position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.chip::before,.chip::after{content:"";position:absolute;background:rgba(0,0,0,.22)}
+.chip::before{left:0;right:0;top:50%;height:1px}.chip::after{top:0;bottom:0;left:50%;width:1px}
+.nfc{width:20px;height:20px;opacity:.85}
+.lbl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;opacity:.8;font-weight:700;margin-bottom:4px}
+.lbl .eye{display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-left:6px}
+.balbtn{background:none;border:0;padding:0;color:inherit;text-align:left;display:block}
+.bal{font-family:var(--mono);font-size:clamp(28px,9vw,40px);font-weight:600;letter-spacing:-.02em;line-height:1}
+.holder{font-family:var(--display);font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.06em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cardnum{font-family:var(--mono);font-size:13px;letter-spacing:.14em;opacity:.85;flex:none}
+.card.flash{animation:flash .9s}
+@keyframes flash{30%{transform:scale(1.03) rotate(-.6deg)}}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:14px;text-align:left;display:flex;align-items:center;gap:12px;min-height:76px}
+.act .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--soft);color:var(--accent);flex:none}
+.act .ic svg{width:22px;height:22px}
+.act b{display:block;font-size:16px;font-weight:700}
+.act span.s{display:block;font-size:12.5px;color:var(--muted);line-height:1.3}
+.act.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;grid-column:1/-1;min-height:72px}
+.act.primary .ic{background:color-mix(in oklab,var(--accent-ink) 18%,transparent);color:inherit}
+.act.primary span.s{color:inherit;opacity:.8}
+.act.gold .ic{color:var(--gold);background:color-mix(in oklab,var(--gold) 16%,transparent)}
+.act:active{transform:scale(.98)}
+.act:disabled{opacity:.5}
+
+.priv{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;text-align:left;width:100%}
+.priv b{display:block;font-size:15px}
+.priv span.s{display:block;font-size:12.5px;color:var(--muted);line-height:1.3}
+.priv>span:first-child{flex:1;min-width:0}
+.sw2{width:48px;height:28px;border-radius:999px;background:var(--line);position:relative;flex:none;transition:background .2s}
+.sw2::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.priv[aria-checked="true"] .sw2{background:var(--accent)}
+.priv[aria-checked="true"] .sw2::after{transform:translateX(20px)}
+
+.players{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:4px 0;overflow:hidden}
+.pl{display:grid;grid-template-columns:22px 1fr auto;grid-template-rows:auto 4px;gap:6px 10px;align-items:center;padding:11px 14px;width:100%;background:none;border:0;text-align:left}
+.pl+.pl{border-top:1px solid var(--line)}
+.pl:active{background:var(--soft)}
+.pos{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.nm{min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:8px}
+.pawn{width:12px;height:12px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.15)}
+.you,.lock{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+.you{color:var(--accent)} .lock{color:var(--muted)}
+.v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+.bar{grid-column:2/-1;height:4px;border-radius:4px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px;transition:width .5s}
+.neg-t{color:var(--neg)}
+.tip{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);margin-top:10px}
+.tip svg{width:18px;height:18px;flex:none;color:var(--gold);margin-top:1px}
+
+.tx{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:2px 14px}
+.t{display:grid;grid-template-columns:34px 1fr auto;gap:2px 12px;padding:12px 0;align-items:center}
+.t+.t{border-top:1px solid var(--line)}
+.t .ar{grid-row:1/3;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--muted);font-weight:700}
+.t.in .ar{background:color-mix(in oklab,var(--pos) 15%,transparent);color:var(--pos)}
+.t.out .ar{background:color-mix(in oklab,var(--neg) 14%,transparent);color:var(--neg)}
+.t .who{min-width:0;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t .amt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.t .meta{grid-column:2/-1;font-size:12.5px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.t.in .amt{color:var(--pos)} .t.out .amt{color:var(--neg)}
+.t.est .amt{text-decoration:line-through;color:var(--muted)}
+.t.est .who{color:var(--muted)}
+.pend{color:var(--gold);font-weight:700}
+.estlbl{color:var(--neg);font-weight:700}
+.undo{background:none;border:1px solid color-mix(in oklab,var(--neg) 40%,transparent);color:var(--neg);font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:999px}
+.undo.arm{background:var(--neg);color:#fff;border-color:var(--neg)}
+.empty{color:var(--muted);font-size:14px;padding:16px 0}
+
+.hero{display:flex;flex-direction:column;gap:10px;padding-top:6px}
+.hero .big{width:70px;height:70px;color:var(--accent)}
+.hero p{color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px}
+label{font-size:13px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.inp{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:13px 14px;font-size:17px;width:100%}
+.inp:focus{outline:none;border-color:var(--accent)}
+.code-inp{font-family:var(--mono);font-size:28px;letter-spacing:.35em;text-transform:uppercase;text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.colors{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:44px;height:44px;border-radius:50%;border:3px solid var(--surface);box-shadow:0 0 0 1.5px var(--line)}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 2.5px var(--ink)}
+.sw:disabled{opacity:.18;cursor:not-allowed}
+.btn{border:0;background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:16px;font-weight:700;font-size:17px;width:100%}
+.btn:disabled{opacity:.45}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:600}
+.btn.gold{background:var(--gold);color:#1d1504}
+.claim{display:flex;flex-direction:column;gap:8px}
+.claim button{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:14px;text-align:left;font-weight:600}
+.claim button .v{margin-left:auto;color:var(--muted);font-weight:500}
+.hint{font-size:12.5px;color:var(--muted)}
+.or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.install{display:flex;gap:12px;align-items:flex-start}
+.install img{width:44px;height:44px;border-radius:11px;flex:none}
+.install b{display:block}
+
+.scrim{position:fixed;inset:0;background:rgba(4,9,24,.55);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--surface);border-radius:22px 22px 0 0;
+  padding:10px max(18px,env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-right,0px));
+  max-height:92%;overflow:auto;display:flex;flex-direction:column;gap:14px;animation:up .24s ease-out}
+.sheet::before{content:"";width:40px;height:4px;border-radius:4px;background:var(--line);margin:0 auto}
+.sheet>*{width:100%;max-width:460px;margin-inline:auto}
+@keyframes up{from{transform:translateY(40px);opacity:.3}}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-h .who{display:flex;align-items:center;gap:10px;min-width:0}
+.sheet-h b{font-family:var(--display);font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-h small{display:block;font-family:var(--mono);color:var(--muted);font-size:13px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--soft);padding:4px;border-radius:14px}
+.tabs button{border:0;background:transparent;border-radius:10px;padding:10px 2px;font-weight:700;font-size:13.5px}
+.tabs button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.amount{font-family:var(--mono);font-size:40px;font-weight:600;border:0;background:transparent;width:100%;padding:4px 0;border-bottom:2px solid var(--line);font-variant-numeric:tabular-nums}
+.amount:focus{outline:none;border-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:9px 14px;font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.warn{font-size:13px;color:var(--neg);min-height:1em}
+.qr{background:#fff;border-radius:16px;padding:14px;width:min(240px,100%);margin:0 auto;line-height:0}
+.qr svg{width:100%;height:auto}
+.bigcode{font-family:var(--mono);font-size:40px;font-weight:600;letter-spacing:.3em;text-align:center;padding-left:.3em}
+.linkbox{font-family:var(--mono);font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;word-break:break-all;-webkit-user-select:all;user-select:all}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;
+  background:var(--ink);color:var(--bg);padding:10px 10px 10px 18px;border-radius:14px;font-weight:600;font-size:15px;width:max-content;max-width:calc(100% - 32px);
+  box-shadow:0 10px 30px -10px rgba(0,0,0,.5);display:flex;align-items:center;gap:12px}
+.toast span{padding:2px 8px 2px 0}
+.toast button{border:0;background:color-mix(in oklab,var(--bg) 18%,transparent);color:var(--bg);font-weight:800;border-radius:10px;padding:8px 12px;flex:none}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="globe" viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="3">
+    <circle cx="50" cy="50" r="46"/><ellipse cx="50" cy="50" rx="18" ry="46"/><ellipse cx="50" cy="50" rx="34" ry="46"/>
+    <path d="M50 4v92M4 50h92M10 28h80M10 72h80"/></g></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-orbit" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.3 3.8 8.5s-1.2 6.1-3.8 8.5M12 3.5C9.4 5.9 8.2 8.8 8.2 12s1.2 6.1 3.8 8.5"/></g></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M12 4v13M6 11l6 6 6-6M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="7" width="16" height="10" rx="2.5"/><path d="M21 10.5v3"/><path d="M11.5 9l-2.5 3.2h3.5L10 15"/></g></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-6.5 10-6.5c2 0 3.7.6 5.1 1.5M22 12s-3.6 6.5-10 6.5c-2 0-3.7-.6-5.1-1.5"/><path d="M4 20 20 4"/></g></symbol>
+  <symbol id="i-nfc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8.5a5 5 0 0 1 0 7"/><path d="M12 6a9 9 0 0 1 0 12"/><path d="M16 3.5a13 13 0 0 1 0 17"/></g></symbol>
+  <symbol id="snd-on" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></g></symbol>
+  <symbol id="snd-off" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></g></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <div class="mark">
+      <svg class="globe"><use href="#globe"/></svg>
+      <div style="min-width:0">
+        <div class="word">PORTI BANK</div>
+        <div class="sub" id="status"><span class="dot"></span><span>Edição Mundo</span></div>
+      </div>
+    </div>
+    <div class="tools">
+      <button class="iconbtn" id="sndBtn" aria-label="Som"></button>
+      <button class="pill" id="inviteBtn" hidden>Convidar</button>
+    </div>
+  </header>
+
+  <div class="banner bad" id="cfgBanner" hidden>O banco online ainda não foi configurado. Coloque o endereço e a chave do Supabase no arquivo <b>config.js</b>.</div>
+  <div class="banner warn" id="offBanner" hidden>Sem internet. Pode continuar jogando: os lançamentos ficam guardados neste celular e sobem sozinhos quando o sinal voltar.</div>
+
+  <!-- home -->
+  <section id="vHome" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="hero">
+        <svg class="big"><use href="#globe"/></svg>
+        <h1>O banco da sua mesa</h1>
+        <p>Cada jogador usa o próprio celular como cartão. Sem cadastro: um cria a mesa e os outros entram com o código.</p>
+      </div>
+      <div class="panel" id="resumeBox" hidden>
+        <h2 style="margin:0">Partida em andamento</h2>
+        <button class="btn" id="resumeBtn">Voltar para a mesa</button>
+      </div>
+      <form class="panel" id="joinCodeForm">
+        <h2 style="margin:0">Entrar numa mesa</h2>
+        <label for="codeIn">Código da mesa<input class="inp code-inp" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="K7QM"></label>
+        <button class="btn" type="submit">Entrar</button>
+      </form>
+      <div class="or">ou</div>
+      <form class="panel" id="setupForm">
+        <h2 style="margin:0">Criar uma mesa nova</h2>
+        <div class="two">
+          <label for="sStart">Saldo inicial<input class="inp num" id="sStart" inputmode="numeric" value="2558"></label>
+          <label for="sSalary">Passou pela partida<input class="inp num" id="sSalary" inputmode="numeric" value="200"></label>
+        </div>
+        <p class="hint">Confira os valores no manual da sua caixa e ajuste se forem diferentes.</p>
+        <button class="btn" type="submit" id="createBtn">Abrir o banco</button>
+      </form>
+      <div class="panel" id="installBox" hidden>
+        <div class="install"><img src="icon-192.png" alt=""><div><b>Instale no celular</b><p class="hint" id="installText"></p></div></div>
+        <button class="btn ghost" id="installBtn" hidden>Instalar o PORTI BANK</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- opening a table -->
+  <section id="vWait" hidden>
+    <div class="hero"><h1 id="waitTitle">Abrindo a mesa…</h1><p id="waitText">Buscando a partida no banco.</p>
+      <button class="btn ghost" id="waitBack" style="margin-top:10px">Voltar</button></div>
+  </section>
+
+  <!-- choose card -->
+  <section id="vJoin" hidden>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="hero"><h1>Qual é o seu cartão?</h1><p>Escolha um cartão que já está na mesa ou crie o seu.</p></div>
+      <div id="claimWrap" hidden><h2>Já na mesa</h2><div class="claim" id="claimList"></div></div>
+      <form class="panel" id="joinForm">
+        <h2 style="margin:0">Novo cartão PORTI</h2>
+        <label for="jName">Seu nome<input class="inp" id="jName" maxlength="16" autocomplete="off" placeholder="Ex.: Bia"></label>
+        <div><div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:8px">Cor do peão</div><div class="colors" id="jColors"></div></div>
+        <button class="btn" type="submit" id="joinBtn">Emitir meu cartão</button>
+      </form>
+      <button class="btn ghost" id="joinBack">Sair desta mesa</button>
+    </div>
+  </section>
+
+  <!-- main -->
+  <section id="vMain" hidden>
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div class="card" id="card"></div>
+      <div class="actions">
+        <button class="act primary" id="aPay"><span class="ic"><svg><use href="#i-send"/></svg></span><span><b>Pagar</b><span class="s">Aluguel, compra ou imposto, para alguém ou o banco</span></span></button>
+        <button class="act gold" id="aSalary"><span class="ic"><svg><use href="#i-orbit"/></svg></span><span><b id="salaryLbl">+ $200</b><span class="s">Passei pela partida</span></span></button>
+        <button class="act" id="aRecv"><span class="ic"><svg><use href="#i-in"/></svg></span><span><b>Receber</b><span class="s">Do banco</span></span></button>
+      </div>
+      <button class="priv" id="privBtn" role="switch" aria-checked="false"><span><b>Esconder meu saldo da mesa</b><span class="s" id="privSub">Os outros jogadores veem seu saldo no ranking</span></span><span class="sw2"></span></button>
+      <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
+        <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
+      <div><h2>Extrato</h2><div class="tx" id="txList"></div></div>
+      <div class="foot">
+        <span class="muted num" style="font-size:12.5px" id="rules"></span>
+        <span style="display:flex;gap:16px"><button class="link" id="switchBtn">Trocar cartão</button><button class="link" id="leaveBtn" style="color:var(--neg)">Sair da mesa</button></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shName">
+  <div class="sheet-h"><div class="who"><span class="pawn" id="shDot" style="width:16px;height:16px"></span><div style="min-width:0"><b id="shName"></b><small id="shBal"></small></div></div><button class="link" id="shClose">Cancelar</button></div>
+  <div class="tabs" id="shTabs">
+    <button data-kind="pay">Pagar</button><button data-kind="recv">Receber</button><button data-kind="salary">Partida</button><button data-kind="set">Ajustar</button>
+  </div>
+  <div id="shToWrap"><h2>Para quem</h2><div class="chips" id="shTo"></div></div>
+  <div id="shAmtWrap"><h2 id="shAmtLbl">Valor</h2>
+    <input class="amount" id="shAmount" inputmode="numeric" autocomplete="off" placeholder="$ 0">
+    <div class="chips" id="shQuick" style="margin-top:12px"></div></div>
+  <div id="shReasonWrap"><h2>Motivo (opcional)</h2><div class="chips" id="shReason"></div></div>
+  <p class="hint" id="shHint" hidden></p>
+  <div class="warn" id="shWarn"></div>
+  <button class="btn" id="shGo" disabled>Pagar</button>
+</div>
+<div class="sheet" id="invSheet" hidden role="dialog" aria-modal="true" aria-labelledby="invTitle">
+  <div class="sheet-h"><b id="invTitle">Chamar a mesa</b><button class="link" id="invClose">Fechar</button></div>
+  <p class="muted" style="font-size:14px">Os amigos apontam a câmera para o código, ou abrem o PORTI BANK e digitam o código da mesa.</p>
+  <div class="qr" id="qr"></div>
+  <div class="bigcode" id="invCode"></div>
+  <div class="linkbox" id="invLink"></div>
+  <button class="btn ghost" id="copyBtn">Copiar link</button>
+</div>
+<div class="toast" id="toast" hidden role="status"><span id="toastText"></span><button id="toastBtn" hidden></button></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

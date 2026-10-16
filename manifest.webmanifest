@@ -1,0 +1,18 @@
+{
+  "name": "PORTI BANK",
+  "short_name": "PORTI BANK",
+  "description": "O banco da sua mesa de Banco Imobiliário: cada jogador usa o celular como cartão.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F1A35",
+  "theme_color": "#0F1A35",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
