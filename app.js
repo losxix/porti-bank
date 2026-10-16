@@ -649,7 +649,7 @@ let SH={kind:"pay",actor:null,to:null,note:""};
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
 function quickValues(){
   const s=L.mesa.saldo_inicial,p=L.mesa.salario;
-  if(s>=1e6||p>=1e5)return[10000,20000,50000,100000,450000];
+  if(s>=1e6||p>=1e5)return[10000,45000,100000,250000,300000];
   if(s>=10000)return[100,500,1000,5000];
   return[10,50,100,500];
 }
