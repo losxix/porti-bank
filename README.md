@@ -6,7 +6,12 @@ Banco digital para jogar Banco Imobiliário com os amigos. Cada jogador usa o pr
 - **Sem sinal:** o jogo continua. Os lançamentos ficam numa fila no celular e sobem sozinhos quando a internet volta, sem duplicar.
 - **Estorno:** qualquer transferência pode ser estornada por quem pagou, quem recebeu ou quem lançou. Logo depois de pagar ainda aparece um botão "Desfazer".
 - **Celular descarregou:** toque no nome da pessoa no ranking para pagar, receber ou ajustar o saldo por ela.
-- Esconder saldo, sons de maquininha, QR code para chamar a mesa, botão Ajustar para corrigir saldos.
+- **Banqueiro:** quem abre a mesa vira o banqueiro. Passar pela partida e receber do banco viram pedidos que só o banqueiro aprova. O banco pode ser passado para outro jogador.
+- **Calculadora:** na tela de pagar/receber, dados × valor (ex.: 11 × $ 40.000).
+- **Quem chega no meio:** entra com o código; o banqueiro pode dar a média da mesa pelo Ajustar.
+- Extrato da mesa visível para todos, esconder saldo, sons de maquininha, QR code para chamar a mesa.
+
+Site: https://losxix.github.io/porti-bank/
 
 ## Colocar no ar (uma vez só, uns 15 minutos)
 

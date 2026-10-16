@@ -2,7 +2,9 @@
    A partida fica no Supabase. Cada celular guarda uma cópia e uma fila de
    lançamentos ainda não enviados: sem internet, o jogo continua e a fila sobe
    sozinha quando o sinal volta. Todo lançamento tem um id criado no celular,
-   então reenviar nunca duplica. */
+   então reenviar nunca duplica.
+   Banqueiro: dinheiro que sai do banco para um jogador vira pedido até o
+   banqueiro aprovar (a regra também vale no servidor). */
 (function(){
 "use strict";
 
@@ -15,7 +17,9 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>"$ "+Math.abs(Math.round(n)).toLocaleString("pt-BR");
 const fmt=n=>(n<0?"− ":"")+money(n);
+const short=v=>v>=1e6&&v%1e5===0?(v/1e6).toLocaleString("pt-BR")+" mi":v>=1000&&v%1000===0?(v/1000).toLocaleString("pt-BR")+" mil":v.toLocaleString("pt-BR");
 const parseAmt=s=>{const n=parseInt(String(s).replace(/\D/g,""),10);return isNaN(n)?0:n};
+const fmtInput=el=>{const raw=el.value;const n=parseAmt(raw);el.value=raw.replace(/\D/g,"")===""?"":n.toLocaleString("pt-BR")};
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 const nowIso=()=>new Date().toISOString();
 const tms=s=>{if(!s)return 0;const t=Date.parse(String(s).replace(" ","T").replace(/(\.\d{3})\d+/,"$1"));return isNaN(t)?0:t};
@@ -27,6 +31,7 @@ const uuid=()=>{
 };
 const MASK="$ •••••";
 const EPOCH="1970-01-01T00:00:00.000Z";
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 
 /* ---------- backend ---------- */
 function makeApi(){
@@ -59,6 +64,7 @@ function makeApi(){
       const ch=sb.channel("mesa-"+code)
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_lancamentos",filter:"mesa=eq."+code},p=>p.new&&onRow("lanc",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_jogadores",filter:"mesa=eq."+code},p=>p.new&&onRow("jog",p.new))
+        .on("postgres_changes",{event:"*",schema:"public",table:"pb_mesas",filter:"codigo=eq."+code},p=>p.new&&onRow("mesa",p.new))
         .subscribe(s=>onStatus(s));
       return()=>{try{sb.removeChannel(ch)}catch(e){}};
     }
@@ -66,17 +72,34 @@ function makeApi(){
 }
 const API=window.PORTI_TEST_API||makeApi();
 
-/* ---------- sound ---------- */
-let soundOn=ls.get("pb-sound")!=="0",ac=null;
-function actx(){if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(ac&&ac.state==="suspended")ac.resume();return ac}
+/* ---------- sound ----------
+   Phones only let a page make sound after a tap, and the iPhone pauses the
+   sound engine when the screen locks or the app goes to the background. So
+   every tap wakes the sound back up, and the speaker button shows when it is
+   still asleep. On the iPhone the silent switch also mutes it. */
+let soundOn=ls.get("pb-sound")!=="0",ac=null,soundReady=false;
+function actx(){
+  if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.onstatechange=()=>{soundReady=ac.state==="running";drawSnd()}}catch(e){}}
+  return ac;
+}
+function wakeSound(){
+  const a=actx();if(!a)return;
+  if(a.state!=="running"){
+    try{const p=a.resume();if(p&&p.then)p.then(()=>{soundReady=a.state==="running";drawSnd()}).catch(()=>{})}catch(e){}
+    try{const b=a.createBuffer(1,1,22050),s=a.createBufferSource();s.buffer=b;s.connect(a.destination);s.start(0)}catch(e){}
+  }
+  soundReady=a.state==="running";
+}
+["pointerdown","touchend","keydown"].forEach(ev=>document.addEventListener(ev,wakeSound,{passive:true,capture:true}));
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){soundReady=false}drawSnd()});
 function tone(f,t0,dur,type,vol,f2){
-  const a=actx();if(!a)return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;
+  const a=actx();if(!a||a.state!=="running")return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;
   o.type=type||"sine";o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+dur);
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol||.15,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05);
 }
 function noise(t0,dur,vol){
-  const a=actx();if(!a)return;const b=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);
+  const a=actx();if(!a||a.state!=="running")return;const b=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
   const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();f.type="highpass";f.frequency.value=3000;g.gain.value=vol;
   s.buffer=b;s.connect(f).connect(g).connect(a.destination);s.start(a.currentTime+t0);
@@ -86,26 +109,50 @@ const SFX={
   pay(){noise(0,.08,.1);tone(1320,.02,.12,"triangle",.14);tone(1760,.1,.35,"sine",.16);tone(2637,.1,.3,"sine",.05)},
   recv(){tone(988,0,.08,"square",.07);tone(1319,.07,.35,"square",.07)},
   go(){[523,659,784,1047].forEach((f,i)=>tone(f,i*.08,.22,"triangle",.14));tone(1568,.34,.4,"sine",.08)},
+  ask(){tone(660,0,.12,"triangle",.12);tone(880,.14,.12,"triangle",.12);tone(660,.28,.18,"triangle",.1)},
   undo(){tone(660,0,.14,"sine",.13,330)},
   broke(){[392,370,349,262].forEach((f,i)=>tone(f,i*.18,.24,"sawtooth",.06))},
   sync(){tone(784,0,.12,"sine",.1);tone(1175,.1,.25,"sine",.1)},
   err(){tone(180,0,.18,"square",.07)}
 };
 function play(k){
-  if(soundOn)try{SFX[k]()}catch(e){}
-  try{if(navigator.vibrate)navigator.vibrate(k==="err"?[40,40,40]:k==="pay"?25:12)}catch(e){}
+  if(soundOn)try{wakeSound();SFX[k]()}catch(e){}
+  try{if(navigator.vibrate)navigator.vibrate(k==="err"?[40,40,40]:k==="ask"?[60,60,60]:k==="pay"?25:12)}catch(e){}
 }
-function drawSnd(){$("#sndBtn").innerHTML=`<svg><use href="#${soundOn?"snd-on":"snd-off"}"/></svg>`;$("#sndBtn").setAttribute("aria-label",soundOn?"Desligar som":"Ligar som")}
-$("#sndBtn").onclick=()=>{soundOn=!soundOn;ls.set("pb-sound",soundOn?"1":"0");drawSnd();if(soundOn)play("recv")};
+function drawSnd(){
+  const b=$("#sndBtn");if(!b)return;
+  const locked=soundOn&&!soundReady;
+  b.innerHTML=`<svg><use href="#${soundOn?"snd-on":"snd-off"}"/></svg>`;
+  b.className="iconbtn"+(soundOn?(locked?" locked":""):" off");
+  b.setAttribute("aria-label",!soundOn?"Ligar o som":locked?"Som travado: toque para ativar":"Som ligado: toque para desligar");
+}
+$("#sndBtn").onclick=()=>{
+  wakeSound();
+  if(soundOn&&!soundReady){setTimeout(()=>{drawSnd();play("recv");toast(isIOS?"Som ativado. Se não ouvir nada, tire o iPhone do modo silencioso.":"Som ativado.")},60);return}
+  soundOn=!soundOn;ls.set("pb-sound",soundOn?"1":"0");drawSnd();
+  if(soundOn){setTimeout(()=>play("recv"),60);toast(isIOS?"Som ligado. No iPhone, ele não toca no modo silencioso.":"Som ligado.")}
+  else toast("Som desligado.");
+};
 
 /* ---------- local copy of a table ----------
-   L = {v, codigo, mesa:{saldo_inicial,salario}, jog:{id:row}, lanc:{id:row}, out:[op], me, since}
+   L = {v, codigo, mesa:{saldo_inicial,salario,banqueiro}, jog:{id:row}, lanc:{id:row}, out:[op], me, since}
    jog/lanc hold rows confirmed by the server; out holds what this phone still has to send. */
 let L=null,net="idle",live=false,unsub=null,timer=null,firstSync=false,forceJoin=false;
 let peek=ls.get("pb-mask")==="1";
 const blank=code=>({v:1,codigo:code,mesa:null,jog:{},lanc:{},out:[],me:null,since:0});
 function loadMesa(code){try{const d=JSON.parse(ls.get("pb-mesa-"+code)||"null");if(d&&d.v===1)return d}catch(e){}return null}
 function save(){if(L)ls.set("pb-mesa-"+L.codigo,JSON.stringify(L))}
+
+/* who holds the bank, counting changes still waiting in the queue */
+function banker(){
+  let b=L&&L.mesa?L.mesa.banqueiro||null:null;
+  if(!L)return null;
+  for(const op of L.out){if(op.t==="banco")b=op.para;else if(op.t==="entrar"&&!b)b=op.id}
+  return b;
+}
+const iAmBanker=()=>!!L&&!!L.me&&banker()===L.me;
+/* bank money going to a player needs the banker, unless the banker launched it */
+const needsApproval=(de,para,por)=>!de&&!!para&&!!banker()&&por!==banker();
 
 /* merged view: server rows + what is still waiting in the queue */
 function derive(){
@@ -115,34 +162,52 @@ function derive(){
   for(const op of L.out){
     if(op.t==="entrar"&&!P[op.id])P[op.id]={id:op.id,nome:op.nome,cor:op.cor,oculto:false,criado_em:op.em,pend:true};
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
-    else if(op.t==="lancar"&&!T[op.id])T[op.id]={id:op.id,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,pend:true};
-    else if(op.t==="estornar"&&T[op.id]&&!T[op.id].estornado_em){T[op.id].estornado_em=op.em;T[op.id].estornado_por=op.por;T[op.id].estPend=true}
+    else if(op.t==="lancar"&&!T[op.id])T[op.id]={id:op.id,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:op.status||"aprovado",pend:true};
+    else if(op.t==="estornar"&&T[op.id]&&!T[op.id].estornado_em&&T[op.id].status!=="recusado"){
+      if(T[op.id].status==="pendente"){T[op.id].status="recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
+      else{T[op.id].estornado_em=op.em;T[op.id].estornado_por=op.por;T[op.id].estPend=true}
+    }
+    else if((op.t==="aprovar"||op.t==="recusar")&&T[op.id]&&T[op.id].status==="pendente"){T[op.id].status=op.t==="aprovar"?"aprovado":"recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
   }
   return{P,T};
 }
+const counts=t=>!t.estornado_em&&(t.status||"aprovado")==="aprovado";
 function balances(D){
   const b={},s=(L.mesa&&L.mesa.saldo_inicial)||0;
   for(const id in D.P)b[id]=s;
-  for(const t of Object.values(D.T)){if(t.estornado_em)continue;if(t.de&&t.de in b)b[t.de]-=t.valor;if(t.para&&t.para in b)b[t.para]+=t.valor}
+  for(const t of Object.values(D.T)){if(!counts(t))continue;if(t.de&&t.de in b)b[t.de]-=t.valor;if(t.para&&t.para in b)b[t.para]+=t.valor}
   return b;
 }
 const playersArr=D=>Object.values(D.P).sort((a,b)=>tms(a.criado_em)-tms(b.criado_em));
 const txArr=D=>Object.values(D.T).sort((a,b)=>tms(b.feito_em)-tms(a.feito_em));
 function nameOf(id,D){if(!id)return"Banco";const p=(D||derive()).P[id];return p?p.nome:"?"}
+function tableAverage(D,exceptId){
+  const b=balances(D);const ids=Object.keys(D.P).filter(id=>id!==exceptId);
+  if(!ids.length)return L.mesa.saldo_inicial;
+  return Math.round(ids.reduce((s,id)=>s+b[id],0)/ids.length/1000)*1000;
+}
 
 /* ---------- sync engine ---------- */
 function enqueue(op){L.out.push(op);save();render();setTimeout(syncNow,0)}
 function confirmOp(op){
-  if(op.t==="entrar"&&!L.jog[op.id])L.jog[op.id]={id:op.id,mesa:L.codigo,nome:op.nome,cor:op.cor,oculto:false,oculto_em:EPOCH,criado_em:op.em};
-  else if(op.t==="lancar"&&!L.lanc[op.id])L.lanc[op.id]={id:op.id,mesa:L.codigo,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo||null,lancado_por:op.por,feito_em:op.em,estornado_em:null,estornado_por:null};
-  else if(op.t==="estornar"&&L.lanc[op.id]&&!L.lanc[op.id].estornado_em){L.lanc[op.id].estornado_em=op.em;L.lanc[op.id].estornado_por=op.por}
+  if(op.t==="entrar"&&!L.jog[op.id]){L.jog[op.id]={id:op.id,mesa:L.codigo,nome:op.nome,cor:op.cor,oculto:false,oculto_em:EPOCH,criado_em:op.em};if(L.mesa&&!L.mesa.banqueiro)L.mesa.banqueiro=op.id}
+  else if(op.t==="lancar"&&!L.lanc[op.id])L.lanc[op.id]={id:op.id,mesa:L.codigo,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo||null,lancado_por:op.por,feito_em:op.em,estornado_em:null,estornado_por:null,status:op.status||"aprovado"};
+  else if(op.t==="estornar"&&L.lanc[op.id]&&!L.lanc[op.id].estornado_em){
+    const t=L.lanc[op.id];
+    if(t.status==="pendente"){t.status="recusado";t.aprovado_por=op.por}else if(t.status!=="recusado"){t.estornado_em=op.em;t.estornado_por=op.por}
+  }
+  else if((op.t==="aprovar"||op.t==="recusar")&&L.lanc[op.id]&&L.lanc[op.id].status==="pendente"){L.lanc[op.id].status=op.t==="aprovar"?"aprovado":"recusado";L.lanc[op.id].aprovado_por=op.por}
   else if(op.t==="ocultar"&&L.jog[op.id]){L.jog[op.id].oculto=op.oculto;L.jog[op.id].oculto_em=op.em}
+  else if(op.t==="banco"&&L.mesa){L.mesa.banqueiro=op.para}
 }
 function sendOp(op){
   if(op.t==="entrar")return API.rpc("pb_entrar",{p_id:op.id,p_mesa:L.codigo,p_nome:op.nome,p_cor:op.cor});
   if(op.t==="lancar")return API.rpc("pb_lancar",{p_id:op.id,p_mesa:L.codigo,p_de:op.de,p_para:op.para,p_valor:op.valor,p_motivo:op.motivo||null,p_por:op.por,p_feito_em:op.em});
   if(op.t==="estornar")return API.rpc("pb_estornar",{p_id:op.id,p_por:op.por});
+  if(op.t==="aprovar")return API.rpc("pb_aprovar",{p_id:op.id,p_por:op.por});
+  if(op.t==="recusar")return API.rpc("pb_recusar",{p_id:op.id,p_por:op.por});
   if(op.t==="ocultar")return API.rpc("pb_ocultar",{p_id:op.id,p_oculto:op.oculto,p_quando:op.em});
+  if(op.t==="banco")return API.rpc("pb_passar_banco",{p_mesa:L.codigo,p_de:op.por,p_para:op.para});
   return Promise.resolve();
 }
 async function flush(cur){
@@ -162,31 +227,69 @@ async function flush(cur){
   }
   return sent;
 }
+function mergeMesa(m){
+  if(!m||m.codigo!==L.codigo)return;
+  const was=L.mesa&&L.mesa.banqueiro;
+  L.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null};
+  if(firstSync&&was&&m.banqueiro&&was!==m.banqueiro&&L.me){
+    const D=derive();
+    if(m.banqueiro===L.me){toast("Agora você é o banqueiro da mesa.");play("go")}
+    else toast(nameOf(m.banqueiro,D)+" agora é o banqueiro.");
+  }
+}
 function mergeRows(kind,rows,notify){
   if(!L)return;
-  const news=[];
+  const news=[],joined=[];
   for(const r of rows||[]){
-    if(!r||!r.id||(r.mesa&&r.mesa!==L.codigo))continue;
-    if(kind==="jog"){L.jog[r.id]={...L.jog[r.id],...r}}
-    else{
+    if(!r)continue;
+    if(kind==="mesa"){mergeMesa(r);continue}
+    if(!r.id||(r.mesa&&r.mesa!==L.codigo))continue;
+    if(kind==="jog"){
+      if(notify&&!L.jog[r.id]&&!L.out.some(o=>o.t==="entrar"&&o.id===r.id))joined.push(r);
+      L.jog[r.id]={...L.jog[r.id],...r};
+    }else{
       const old=L.lanc[r.id];
       const mine=L.out.some(o=>o.t==="lancar"&&o.id===r.id);
-      if(notify&&!old&&!mine&&!r.estornado_em)news.push(r);
-      else if(notify&&old&&!old.estornado_em&&r.estornado_em&&r.estornado_por!==L.me)news.push({...r,_est:true});
+      if(notify&&!old&&!mine)news.push({...r,_new:true});
+      else if(notify&&old){
+        if(!old.estornado_em&&r.estornado_em&&r.estornado_por!==L.me)news.push({...r,_est:true});
+        else if(old.status==="pendente"&&r.status&&r.status!=="pendente"&&r.aprovado_por!==L.me)news.push({...r,_dec:r.status});
+      }
       L.lanc[r.id]=r;
     }
     const t=tms(r.atualizado_em);if(t>L.since)L.since=t;
   }
+  if(joined.length)announceJoin(joined);
   if(news.length)announce(news);
+}
+function announceJoin(rows){
+  if(!iAmBanker())return;
+  const D=derive();
+  const started=Object.keys(D.T).length>0;
+  for(const p of rows){
+    if(started)toast(p.nome+" entrou no meio do jogo. Quer equilibrar o saldo?",{label:"Ajustar",run:()=>openSheet("set",p.id)});
+    else toast(p.nome+" entrou na mesa.");
+    play("tap");
+  }
 }
 function announce(news){
   const me=L.me;if(!me)return;
-  const D=derive();
-  const mineNews=news.filter(r=>r.de===me||r.para===me);
-  if(!mineNews.length)return;
-  if(mineNews.length>3){toast(mineNews.length+" lançamentos novos na sua conta");play("recv");flashCard();return}
-  for(const r of mineNews){
+  const D=derive(),boss=iAmBanker();
+  const asks=news.filter(r=>r._new&&r.status==="pendente"&&boss&&r.lancado_por!==me);
+  const mine=news.filter(r=>!asks.includes(r)&&(r.de===me||r.para===me));
+  if(asks.length){
+    toast(asks.length>1?asks.length+" pedidos esperando você aprovar":nameOf(asks[0].lancado_por,D)+" pediu "+money(asks[0].valor)+(asks[0].motivo?" ("+asks[0].motivo+")":""));
+    play("ask");
+  }
+  if(!mine.length)return;
+  if(mine.length>3){toast(mine.length+" lançamentos novos na sua conta");play("recv");flashCard();return}
+  for(const r of mine){
     if(r._est){toast(nameOf(r.estornado_por,D)+" estornou "+money(r.valor)+" ("+nameOf(r.de,D)+" → "+nameOf(r.para,D)+")");play("undo")}
+    else if(r._dec){
+      if(r.para===me&&r._dec==="aprovado"){toast("O banqueiro aprovou: + "+money(r.valor));play(r.motivo==="Passou pela partida"?"go":"recv");flashCard()}
+      else if(r.para===me){toast("O banqueiro recusou o pedido de "+money(r.valor));play("err")}
+    }
+    else if(r.status==="pendente")continue;
     else if(r.para===me&&r.lancado_por!==me){toast("Recebeu "+money(r.valor)+" de "+nameOf(r.de,D));play("recv");flashCard()}
     else if(r.de===me&&r.lancado_por!==me){toast(nameOf(r.lancado_por,D)+" lançou "+money(r.valor)+" na sua conta");play("pay")}
   }
@@ -200,8 +303,10 @@ async function syncNow(){
   try{
     sent=await flush(cur);
     if(L!==cur)return;
-    if(!cur.mesa){const m=await API.mesa(cur.codigo);if(L!==cur)return;if(!m){mesaMissing();return}cur.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario}}
-    const js=await API.jogadores(cur.codigo);if(L!==cur)return;mergeRows("jog",js,false);
+    const m=await API.mesa(cur.codigo);if(L!==cur)return;
+    if(!m){mesaMissing();return}
+    mergeMesa(m);
+    const js=await API.jogadores(cur.codigo);if(L!==cur)return;mergeRows("jog",js,firstSync);
     const ts=await API.lancamentos(cur.codigo,cur.since?cur.since-5000:0);if(L!==cur)return;mergeRows("lanc",ts,firstSync);
     firstSync=true;save();
     const wasOff=net==="offline";
@@ -222,7 +327,7 @@ function setNet(s){
 }
 function schedule(){
   clearTimeout(timer);if(!L)return;
-  const ms=net==="online"&&!L.out.length?(live?25000:5000):4000;
+  const ms=net==="online"&&!L.out.length?(live?20000:4000):4000;
   timer=setTimeout(()=>{if(document.visibilityState==="visible")syncNow();else schedule()},ms);
 }
 window.addEventListener("online",()=>syncNow());
@@ -250,7 +355,7 @@ async function openMesa(code){
     try{
       const m=await API.mesa(code);if(L!==cur)return;
       if(!m){toast("Mesa "+code+" não encontrada. Confira o código.");play("err");leave(true);return}
-      cur.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario};save();
+      cur.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null};save();
     }catch(e){
       if(L!==cur)return;
       toast(e.network?"Sem internet. Para entrar numa mesa pela primeira vez, precisa de sinal.":e.config?"O banco online não está configurado.":e.message);
@@ -299,19 +404,46 @@ function render(){
   if(!meP||forceJoin){renderJoin(D);show("vJoin");return}
   show("vMain");keepAwake();
   if(!$("#sheet").hidden&&D.P[SH.actor])drawSheet();
+  const boss=iAmBanker(),bk=banker();
   const bal=balances(D),c=colorOf(meP.cor),card=$("#card");
   card.style.backgroundColor=c.c;
   card.style.backgroundImage=`linear-gradient(140deg,${c.c} 0%,color-mix(in oklab,${c.c} 62%,#000) 100%)`;
   card.classList.toggle("darktext",!!c.dark);
   card.innerHTML=`<svg class="gl"><use href="#globe"/></svg>
-    <div class="row"><span class="cw">PORTI BANK</span><span class="tier">MUNDO</span></div>
+    <div class="row"><span class="cw">PORTI BANK</span><span class="tier">${boss?"BANQUEIRO":"MUNDO"}</span></div>
     <div class="chiprow"><span class="chip"></span><svg class="nfc"><use href="#i-nfc"/></svg></div>
     <button class="balbtn" id="peekBtn" aria-label="${peek?"Mostrar saldo":"Tapar saldo"}"><div class="lbl">Saldo disponível<svg class="eye"><use href="#${peek?"i-eyeoff":"i-eye"}"/></svg></div><div class="bal">${peek?MASK:fmt(bal[L.me])}</div></button>
     <div class="row"><span class="holder">${esc(meP.nome)}</span><span class="cardnum">•••• ${last4(L.me)}</span></div>`;
-  $("#salaryLbl").textContent="+ "+money(L.mesa.salario);
+
+  /* requests */
+  const txs=txArr(D);
+  const pending=txs.filter(t=>t.status==="pendente").reverse();
+  const box=$("#reqBox");
+  if(boss&&pending.length){
+    box.hidden=false;$("#reqTitle").textContent=pending.length>1?pending.length+" pedidos para aprovar":"Pedido para aprovar";
+    $("#reqList").innerHTML=pending.map(t=>`<div class="rq"><div class="who"><span class="pawn" style="background:${colorOf((D.P[t.para]||{}).cor).c}"></span><span class="n">${esc(nameOf(t.para,D))}</span></div><div class="amt">+ ${money(t.valor)}</div>
+      <div class="meta" style="grid-column:1/-1">${esc(t.motivo||"Receber do banco")}${t.lancado_por!==t.para?" · pedido por "+esc(nameOf(t.lancado_por,D)):""}</div>
+      <div class="btns"><button class="btn ghost small" data-deny="${esc(t.id)}">Recusar</button><button class="btn ok small" data-approve="${esc(t.id)}">Aprovar ${money(t.valor)}</button></div></div>`).join("");
+  }else{
+    const myWait=pending.filter(t=>t.lancado_por===L.me||t.para===L.me);
+    box.hidden=!myWait.length;
+    if(myWait.length){$("#reqTitle").textContent="Aguardando o banqueiro";
+      $("#reqList").innerHTML=myWait.map(t=>`<div class="rq"><div class="who"><span class="n">${esc(t.motivo||"Receber do banco")}</span></div><div class="amt">+ ${money(t.valor)}</div>
+        <div class="meta" style="grid-column:1/-1">${bk?esc(nameOf(bk,D))+" precisa aprovar.":"O banqueiro precisa aprovar."}</div>
+        <div class="btns" style="grid-template-columns:1fr"><button class="btn ghost small" data-deny="${esc(t.id)}">Cancelar pedido</button></div></div>`).join("")}
+  }
+
+  /* action buttons */
+  $("#salaryLbl").textContent=(boss?"+ $ ":"Pedir $ ")+short(L.mesa.salario);
+  $("#aSalary").querySelector(".s").textContent=boss?"Passei pela partida":"Passei pela partida · o banqueiro aprova";
+  $("#aRecv").querySelector(".s").textContent=boss?"Do banco":"Pedido ao banqueiro";
   $("#rules").textContent="Mesa "+L.codigo+" · Início "+money(L.mesa.saldo_inicial)+" · Partida "+money(L.mesa.salario);
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
   $("#privSub").textContent=meP.oculto?"Os outros veem $ ••••• no lugar do seu saldo":"Os outros jogadores veem seu saldo no ranking";
+  $("#bankText").innerHTML=boss?"<b>Você é o banqueiro.</b> Você aprova o dinheiro que sai do banco para os jogadores.":bk?`Banqueiro da mesa: <b>${esc(nameOf(bk,D))}</b>. Dinheiro do banco só cai depois que ele aprova.`:"Esta mesa ainda não tem banqueiro.";
+  $("#passBankBtn").hidden=!boss||Object.keys(D.P).length<2;
+
+  /* ranking */
   const hiddenFor=p=>p.oculto&&p.id!==L.me;
   const all=playersArr(D);
   const vis=all.filter(p=>!hiddenFor(p)).sort((a,b)=>bal[b.id]-bal[a.id]);
@@ -319,27 +451,35 @@ function render(){
   const max=Math.max(1,...vis.map(p=>bal[p.id]));
   $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
-    const tag=p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"";
+    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"");
     return `<button class="pl" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
       <span class="nm"><span class="pawn" style="background:${cc}"></span>${esc(p.nome)}${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
       <span class="bar"><i style="width:${w}%;background:${cc}"></i></span></button>`}).join("");
-  const txs=txArr(D),tl=$("#txList");
+
+  /* statement: everything that happened at the table */
+  const tl=$("#txList");
   if(!txs.length){tl.innerHTML='<p class="empty">Nenhum lançamento ainda. O primeiro pagamento aparece aqui em todos os celulares.</p>';return}
-  tl.innerHTML=txs.slice(0,120).map(t=>{
-    const est=!!t.estornado_em;
-    const cls=(t.para===L.me?"in":t.de===L.me?"out":"")+(est?" est":"");
+  tl.innerHTML=txs.slice(0,150).map(t=>{
+    const st=t.status||"aprovado",est=!!t.estornado_em,wait=st==="pendente",rec=st==="recusado";
+    const cls=(t.para===L.me?"in":t.de===L.me?"out":"")+(est?" est":"")+(wait?" wait":"")+(rec?" rec":"");
     const time=new Date(tms(t.feito_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-    const canUndo=!est&&(t.de===L.me||t.para===L.me||t.lancado_por===L.me);
+    const canUndo=!est&&st==="aprovado"&&(boss||t.de===L.me||t.para===L.me||t.lancado_por===L.me);
     const via=t.lancado_por&&t.lancado_por!==t.de&&t.lancado_por!==t.para?`<span>lançado por ${esc(nameOf(t.lancado_por,D))}</span>`:"";
+    const appr=st==="aprovado"&&!t.de&&t.aprovado_por&&t.aprovado_por!==t.lancado_por?`<span>aprovado por ${esc(nameOf(t.aprovado_por,D))}</span>`:"";
     const pend=t.pend?'<span class="pend">aguardando internet</span>':"";
+    const stl=wait?'<span class="waitlbl">aguardando o banqueiro</span>':rec?`<span class="reclbl">${t.aprovado_por&&t.aprovado_por===t.lancado_por&&t.aprovado_por!==bk?"Pedido cancelado":"Recusado"}</span>`:"";
     const estl=est?`<span class="estlbl">${t.estPend?"Estornando…":"Estornado por "+esc(nameOf(t.estornado_por,D))}</span>`:"";
-    const undo=canUndo?`<button class="undo ${armedUndo===t.id?"arm":""}" data-undo="${esc(t.id)}">${armedUndo===t.id?"Confirmar estorno":"Estornar"}</button>`:"";
-    const sign=est?"":t.para===L.me?"+ ":t.de===L.me?"− ":"";
+    let btns="";
+    if(wait&&boss)btns=`<button class="okbtn" data-approve="${esc(t.id)}">Aprovar</button><button class="undo" data-deny="${esc(t.id)}">Recusar</button>`;
+    else if(wait&&(t.lancado_por===L.me||t.para===L.me))btns=`<button class="undo" data-deny="${esc(t.id)}">Cancelar pedido</button>`;
+    else if(canUndo)btns=`<button class="undo ${armedUndo===t.id?"arm":""}" data-undo="${esc(t.id)}">${armedUndo===t.id?"Confirmar estorno":"Estornar"}</button>`;
+    const off=est||rec||wait;
+    const sign=off?"":t.para===L.me?"+ ":t.de===L.me?"− ":"";
     return `<div class="t ${cls}"><span class="ar">${t.para===L.me?"↓":t.de===L.me?"↑":"⇄"}</span>
       <div class="who">${esc(nameOf(t.de,D))} → ${esc(nameOf(t.para,D))}</div>
       <div class="amt">${sign}${money(t.valor)}</div>
-      <div class="meta"><span class="num">${time}</span>${t.motivo?`<span>${esc(t.motivo)}</span>`:""}${via}${pend}${estl}${undo}</div></div>`}).join("");
+      <div class="meta"><span class="num">${time}</span>${t.motivo?`<span>${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join("");
 }
 let joinColor=null;
 function renderJoin(D){
@@ -358,44 +498,65 @@ function toast(text,action){
   const el=$("#toast");$("#toastText").textContent=text;
   const b=$("#toastBtn");b.hidden=!action;
   if(action){b.textContent=action.label;b.onclick=()=>{el.hidden=true;action.run()}}
-  el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,action?6000:3000);
+  el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,action?6000:3200);
 }
 function flashCard(){const c=$("#card");if(!c)return;c.classList.remove("flash");void c.offsetWidth;c.classList.add("flash")}
 
 /* ---------- actions ---------- */
 function lancar(de,para,valor,motivo){
   const id=uuid();
-  enqueue({t:"lancar",id,de:de||null,para:para||null,valor,motivo:motivo||null,por:L.me,em:nowIso()});
-  return id;
+  const status=needsApproval(de,para,L.me)?"pendente":"aprovado";
+  enqueue({t:"lancar",id,de:de||null,para:para||null,valor,motivo:motivo||null,por:L.me,em:nowIso(),status});
+  return{id,status};
 }
 function estornar(id){
-  const D=derive(),t=D.T[id];if(!t||t.estornado_em)return;
+  const D=derive(),t=D.T[id];if(!t||t.estornado_em||t.status==="recusado")return;
   enqueue({t:"estornar",id,por:L.me,em:nowIso()});
-  play("undo");toast("Estornado: "+nameOf(t.de,D)+" → "+nameOf(t.para,D)+" "+money(t.valor));
+  play("undo");
+  toast(t.status==="pendente"?"Pedido cancelado":"Estornado: "+nameOf(t.de,D)+" → "+nameOf(t.para,D)+" "+money(t.valor));
+}
+function decide(id,ok){
+  const D=derive(),t=D.T[id];if(!t||t.status!=="pendente")return;
+  if(ok){
+    if(!iAmBanker()){toast("Só o banqueiro pode aprovar.");play("err");return}
+    enqueue({t:"aprovar",id,por:L.me,em:nowIso()});play(t.motivo==="Passou pela partida"?"go":"recv");
+    toast("Aprovado: + "+money(t.valor)+" para "+nameOf(t.para,D));
+  }else{
+    enqueue({t:"recusar",id,por:L.me,em:nowIso()});play("undo");
+    toast(iAmBanker()&&t.lancado_por!==L.me?"Pedido de "+nameOf(t.para,D)+" recusado":"Pedido cancelado");
+  }
 }
 let armedUndo=null,armT;
 document.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   if(b.dataset.claim){L.me=b.dataset.claim;forceJoin=false;save();play("tap");render()}
   else if(b.dataset.color){joinColor=b.dataset.color;play("tap");renderJoin(derive())}
+  else if(b.dataset.approve){decide(b.dataset.approve,true)}
+  else if(b.dataset.deny){decide(b.dataset.deny,false)}
   else if(b.dataset.undo){
     const id=b.dataset.undo;
     if(armedUndo!==id){armedUndo=id;clearTimeout(armT);armT=setTimeout(()=>{armedUndo=null;render()},4000);play("tap");render();return}
     armedUndo=null;estornar(id);
   }
   else if(b.dataset.actor){play("tap");openSheet("pay",b.dataset.actor)}
+  else if(b.dataset.bank){
+    const to=b.dataset.bank;closeSheets();
+    enqueue({t:"banco",para:to,por:L.me,em:nowIso()});play("go");
+    toast(nameOf(to)+" agora é o banqueiro.");
+  }
   else if(b.id==="peekBtn"){peek=!peek;ls.set("pb-mask",peek?"1":"0");play("tap");render()}
 });
+["#sStart","#sSalary"].forEach(s=>$(s).addEventListener("input",e=>fmtInput(e.target)));
 $("#codeIn").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"")});
 $("#joinCodeForm").onsubmit=e=>{
-  e.preventDefault();actx();
+  e.preventDefault();
   const c=$("#codeIn").value.trim().toUpperCase();
   if(c.length!==4){play("err");toast("O código tem 4 letras ou números.");return}
   if(!API){toast("O banco online não está configurado.");return}
   play("tap");$("#codeIn").value="";openMesa(c);
 };
 $("#setupForm").onsubmit=async e=>{
-  e.preventDefault();actx();
+  e.preventDefault();
   if(!API){toast("O banco online não está configurado.");return}
   const start=parseAmt($("#sStart").value),salary=parseAmt($("#sSalary").value);
   if(!start){play("err");toast("Coloque um saldo inicial.");return}
@@ -404,17 +565,18 @@ $("#setupForm").onsubmit=async e=>{
   catch(err){play("err");toast(err.network?"Sem internet. Para criar a mesa precisa de sinal.":err.config?"O banco online não está configurado.":err.message)}
   finally{b.disabled=false;b.textContent="Abrir o banco"}
 };
-$("#resumeBtn").onclick=()=>{actx();const last=ls.get("pb-ultima");if(last)openMesa(last)};
+$("#resumeBtn").onclick=()=>{const last=ls.get("pb-ultima");if(last)openMesa(last)};
 $("#waitBack").onclick=()=>leave(true);
 $("#joinBack").onclick=()=>leave(false);
 $("#joinForm").onsubmit=e=>{
-  e.preventDefault();actx();
+  e.preventDefault();
   const name=$("#jName").value.trim();
   if(!name){play("err");toast("Escreva seu nome.");$("#jName").focus();return}
-  const id=uuid();
+  const id=uuid(),first=!banker();
   L.me=id;forceJoin=false;
   enqueue({t:"entrar",id,nome:name,cor:joinColor,em:nowIso()});
-  $("#jName").value="";play("go");toast("Cartão emitido: "+money(L.mesa.saldo_inicial));
+  $("#jName").value="";play("go");
+  toast(first?"Cartão emitido. Você é o banqueiro desta mesa.":"Cartão emitido: "+money(L.mesa.saldo_inicial));
 };
 $("#switchBtn").onclick=()=>{forceJoin=true;play("tap");render()};
 let leaveT;$("#leaveBtn").onclick=e=>{
@@ -432,11 +594,21 @@ $("#privBtn").onclick=()=>{
 $("#aPay").onclick=()=>{play("tap");openSheet("pay")};
 $("#aRecv").onclick=()=>{play("tap");openSheet("recv")};
 $("#aSalary").onclick=e=>{
-  const b=e.currentTarget;b.disabled=true;setTimeout(()=>b.disabled=false,1200);
-  const id=lancar(null,L.me,L.mesa.salario,"Passou pela partida");
-  play("go");flashCard();
-  toast("+ "+money(L.mesa.salario)+" na conta",{label:"Desfazer",run:()=>estornar(id)});
+  const b=e.currentTarget;b.disabled=true;setTimeout(()=>b.disabled=false,1500);
+  const D=derive();
+  if(!iAmBanker()&&txArr(D).some(t=>t.status==="pendente"&&t.para===L.me&&t.motivo==="Passou pela partida")){
+    toast("Você já tem um pedido da partida esperando o banqueiro.");play("err");return;
+  }
+  const r=lancar(null,L.me,L.mesa.salario,"Passou pela partida");
+  if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(L.mesa.salario),{label:"Cancelar",run:()=>estornar(r.id)})}
+  else{play("go");flashCard();toast("+ "+money(L.mesa.salario)+" na conta",{label:"Desfazer",run:()=>estornar(r.id)})}
 };
+$("#passBankBtn").onclick=()=>{
+  const D=derive();
+  $("#bankList").innerHTML=playersArr(D).filter(p=>p.id!==L.me).map(p=>`<button data-bank="${esc(p.id)}"><span class="pawn" style="background:${colorOf(p.cor).c}"></span>${esc(p.nome)}</button>`).join("");
+  $("#scrim").hidden=false;$("#bankSheet").hidden=false;play("tap");
+};
+$("#bankClose").onclick=closeSheets;
 
 /* ---------- invite ---------- */
 const shareLink=()=>location.origin+location.pathname+"#"+L.codigo;
@@ -457,29 +629,44 @@ $("#copyBtn").onclick=async()=>{
 /* ---------- payment sheet ---------- */
 let SH={kind:"pay",actor:null,to:null,note:""};
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
+function quickValues(){
+  const s=L.mesa.saldo_inicial,p=L.mesa.salario;
+  if(s>=1e6||p>=1e5)return[10000,20000,50000,100000,450000];
+  if(s>=10000)return[100,500,1000,5000];
+  return[10,50,100,500];
+}
+function setAmount(n){$("#shAmount").value=n?"$ "+n.toLocaleString("pt-BR"):""}
 function openSheet(kind,actor){
+  if(kind==="set"&&!iAmBanker())kind="pay";
   SH={kind,actor:actor||L.me,to:null,note:""};
-  $("#shAmount").value="";
-  const big=L.mesa.saldo_inicial>=10000;
-  $("#shQuick").innerHTML=(big?[100,500,1000,5000]:[10,50,100,500]).map(v=>`<button data-add="${v}">+${v.toLocaleString("pt-BR")}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+  setAmount(0);closeCalc();
+  $("#shQuick").innerHTML=quickValues().map(v=>`<button data-add="${v}">+${short(v)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
   $("#scrim").hidden=false;$("#sheet").hidden=false;
   drawSheet();
-  if(kind!=="salary"&&SH.actor===L.me)setTimeout(()=>$("#shAmount").focus(),60);
 }
-function closeSheets(){$("#scrim").hidden=true;$("#sheet").hidden=true;$("#invSheet").hidden=true}
+function closeSheets(){$("#scrim").hidden=true;$("#sheet").hidden=true;$("#invSheet").hidden=true;$("#bankSheet").hidden=true}
 function drawSheet(){
-  const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0;
+  const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
   const hiddenBal=p.oculto&&proxy;
   $("#shDot").style.background=colorOf(p.cor).c;
   $("#shName").textContent=proxy?"Lançando por "+p.nome:"Seu cartão";
   $("#shBal").textContent="Saldo "+(hiddenBal?MASK:fmt(bal));
-  document.querySelectorAll("#shTabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind)));
+  document.querySelectorAll("#shTabs button").forEach(b=>{b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind));if(b.dataset.kind==="set")b.hidden=!boss});
+  $("#shTabs").style.gridTemplateColumns=boss?"repeat(4,1fr)":"repeat(3,1fr)";
   $("#shToWrap").hidden=SH.kind!=="pay";
   $("#shAmtWrap").hidden=SH.kind==="salary";
+  $("#calcToggle").hidden=SH.kind==="set";
   $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":"Valor";
   $("#shReasonWrap").hidden=!REASONS[SH.kind].length;
-  $("#shHint").hidden=SH.kind!=="set";
-  $("#shHint").textContent="Use para corrigir o saldo de alguém. O banco lança a diferença no extrato.";
+  $("#shHint").hidden=SH.kind!=="set"&&!((SH.kind==="recv"||SH.kind==="salary")&&!boss);
+  if(SH.kind==="set"){
+    const avg=tableAverage(D,a);
+    $("#shHint").innerHTML=`Para corrigir o saldo, ou equilibrar quem entrou no meio do jogo. O banco lança a diferença no extrato.`;
+    $("#shQuick").innerHTML=[[L.mesa.saldo_inicial,"Início "+short(L.mesa.saldo_inicial)],[avg,"Média da mesa "+short(avg)]].map(([v,l])=>`<button data-setval="${v}">${l}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+  }else{
+    $("#shHint").textContent="Dinheiro do banco só cai depois que o banqueiro aprovar.";
+    if($("#shQuick").querySelector("[data-setval]"))$("#shQuick").innerHTML=quickValues().map(v=>`<button data-add="${v}">+${short(v)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+  }
   const others=playersArr(D).filter(x=>x.id!==a);
   $("#shTo").innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}">${x.cor?`<span class="pawn" style="background:${colorOf(x.cor).c}"></span>`:""}${esc(x.id===L.me?x.nome+" (você)":x.nome)}</button>`).join("");
   $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button data-note="${esc(r)}" aria-pressed="${SH.note===r}">${esc(r)}</button>`).join("");
@@ -492,46 +679,74 @@ function drawSheet(){
     go.disabled=!(amt>0&&SH.to);
     if(amt>bal&&!hiddenBal&&!(a===L.me&&peek))warn.textContent=(proxy?"O saldo de "+an+" fica negativo: ":"Seu saldo fica negativo: ")+fmt(bal-amt);
   }else if(SH.kind==="recv"){
-    go.textContent=amt?(proxy?`${an} recebe ${money(amt)} do banco`:`Receber ${money(amt)} do banco`):"Digite o valor";go.disabled=!(amt>0);
+    go.textContent=!amt?"Digite o valor":boss?(proxy?`${an} recebe ${money(amt)} do banco`:`Receber ${money(amt)} do banco`):`Pedir ${money(amt)} ao banqueiro`;go.disabled=!(amt>0);
   }else if(SH.kind==="salary"){
-    go.textContent=(proxy?an+" recebe ":"Receber ")+money(L.mesa.salario)+" da partida";go.disabled=false;go.className="btn gold";
+    go.textContent=boss?(proxy?an+" recebe ":"Receber ")+money(L.mesa.salario)+" da partida":"Pedir "+money(L.mesa.salario)+" da partida";go.disabled=false;go.className="btn gold";
   }else{
     const d=amt-bal;
     go.textContent=has?`Deixar o saldo em ${money(amt)}`:"Digite o saldo correto";go.disabled=!has||d===0;
-    if(has&&d!==0)warn.textContent=(d>0?"O banco paga ":"O banco recebe ")+money(d);
+    if(has&&d!==0)warn.textContent=(d>0?"O banco paga ":"O banco recebe ")+money(Math.abs(d));
   }
 }
-$("#shTabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;SH.kind=b.dataset.kind;SH.to=null;SH.note="";$("#shAmount").value="";play("tap");drawSheet()});
+$("#shTabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;SH.kind=b.dataset.kind;SH.to=null;SH.note="";setAmount(0);closeCalc();play("tap");drawSheet()});
 $("#shClose").onclick=closeSheets;$("#scrim").onclick=closeSheets;
-$("#shAmount").addEventListener("input",e=>{const raw=e.target.value;const n=parseAmt(raw);e.target.value=raw.replace(/\D/g,"")===""?"":"$ "+n.toLocaleString("pt-BR");drawSheet()});
+$("#shAmount").addEventListener("input",e=>{const raw=e.target.value;setAmount(raw.replace(/\D/g,"")===""?0:parseAmt(raw));if(raw.replace(/\D/g,"")==="")e.target.value="";drawSheet()});
 $("#sheet").addEventListener("click",e=>{
-  const b=e.target.closest("button");if(!b||b.closest("#shTabs"))return;
+  const b=e.target.closest("button");if(!b||b.closest("#shTabs")||b.closest("#calc"))return;
   if(b.dataset.to){SH.to=b.dataset.to;play("tap");drawSheet()}
   else if(b.dataset.note){SH.note=SH.note===b.dataset.note?"":b.dataset.note;play("tap");drawSheet()}
-  else if(b.dataset.add!==undefined){const v=+b.dataset.add;const n=v?parseAmt($("#shAmount").value)+v:0;$("#shAmount").value=n?"$ "+n.toLocaleString("pt-BR"):"";play("tap");drawSheet()}
+  else if(b.dataset.setval){setAmount(+b.dataset.setval);play("tap");drawSheet()}
+  else if(b.dataset.add!==undefined){const v=+b.dataset.add;setAmount(v?parseAmt($("#shAmount").value)+v:0);play("tap");drawSheet()}
 });
+
+/* calculator: dice × value per point */
+let calcDice=0;
+function closeCalc(){$("#calc").hidden=true;$("#calcToggle").setAttribute("aria-expanded","false")}
+function drawCalc(){
+  $("#calcDice").innerHTML=Array.from({length:11},(_,i)=>i+2).map(n=>`<button type="button" data-dice="${n}" aria-pressed="${calcDice===n}">${n}</button>`).join("");
+  const big=L.mesa.saldo_inicial>=1e6||L.mesa.salario>=1e5;
+  $("#calcQuick").innerHTML=(big?[4000,10000,20000,40000,50000,100000]:[4,10,20,40,50,100]).map(v=>`<button type="button" data-cv="${v}">${short(v)}</button>`).join("");
+  const v=parseAmt($("#calcVal").value);
+  const ok=calcDice>0&&v>0;
+  $("#calcExpr").textContent=ok?`${calcDice} × ${money(v)} = ${money(calcDice*v)}`:calcDice?`${calcDice} × ?`:"Escolha os dados e o valor";
+  $("#calcUse").disabled=!ok;
+}
+$("#calcToggle").onclick=()=>{
+  const open=$("#calc").hidden;
+  $("#calc").hidden=!open;$("#calcToggle").setAttribute("aria-expanded",String(open));
+  if(open)drawCalc();play("tap");
+};
+$("#calc").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.dice){calcDice=+b.dataset.dice;play("tap");drawCalc()}
+  else if(b.dataset.cv){$("#calcVal").value=(+b.dataset.cv).toLocaleString("pt-BR");play("tap");drawCalc()}
+  else if(b.id==="calcUse"){const v=parseAmt($("#calcVal").value);setAmount(calcDice*v);closeCalc();play("recv");drawSheet()}
+});
+$("#calcVal").addEventListener("input",e=>{fmtInput(e.target);drawCalc()});
+
 $("#shGo").onclick=()=>{
   const D=derive(),a=SH.actor,an=nameOf(a,D),proxy=a!==L.me,amt=parseAmt($("#shAmount").value);
   const before=balances(D)[a];
-  let id,msg,snd;
+  let r,msg,snd;
   if(SH.kind==="pay"){
     if(!(amt>0&&SH.to))return;
     const to=SH.to==="bank"?null:SH.to;
-    id=lancar(a,to,amt,SH.note);msg=(proxy?an+" pagou ":"Pago: ")+money(amt)+" para "+nameOf(to,D);snd="pay";
+    r=lancar(a,to,amt,SH.note);msg=(proxy?an+" pagou ":"Pago: ")+money(amt)+" para "+nameOf(to,D);snd="pay";
   }else if(SH.kind==="recv"){
     if(!(amt>0))return;
-    id=lancar(null,a,amt,SH.note);msg=(proxy?an+" recebeu ":"Recebido: ")+money(amt);snd="recv";
+    r=lancar(null,a,amt,SH.note);msg=(proxy?an+" recebeu ":"Recebido: ")+money(amt);snd="recv";
   }else if(SH.kind==="salary"){
-    id=lancar(null,a,L.mesa.salario,"Passou pela partida");msg=an+" passou pela partida: + "+money(L.mesa.salario);snd="go";
+    r=lancar(null,a,L.mesa.salario,"Passou pela partida");msg=an+" passou pela partida: + "+money(L.mesa.salario);snd="go";
   }else{
     const d=amt-before;if(!d)return;
-    id=d>0?lancar(null,a,d,"Ajuste de saldo"):lancar(a,null,-d,"Ajuste de saldo");
+    r=d>0?lancar(null,a,d,"Ajuste de saldo"):lancar(a,null,-d,"Ajuste de saldo");
     msg="Saldo de "+an+" ajustado para "+money(amt);snd="recv";
   }
   closeSheets();
+  if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(SH.kind==="salary"?L.mesa.salario:amt),{label:"Cancelar",run:()=>estornar(r.id)});return}
   const after=balances(derive())[a];
-  if(before>=0&&after<0){play("broke");toast(an+" ficou no vermelho!",{label:"Desfazer",run:()=>estornar(id)})}
-  else{play(snd);toast(msg,{label:"Desfazer",run:()=>estornar(id)})}
+  if(before>=0&&after<0){play("broke");toast(an+" ficou no vermelho!",{label:"Desfazer",run:()=>estornar(r.id)})}
+  else{play(snd);toast(msg,{label:"Desfazer",run:()=>estornar(r.id)})}
   if(!proxy&&SH.kind!=="pay")flashCard();
 };
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
@@ -544,10 +759,9 @@ function isStandalone(){return(window.matchMedia&&matchMedia("(display-mode: sta
 function drawInstall(){
   const box=$("#installBox");
   if(isStandalone()){box.hidden=true;return}
-  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   box.hidden=false;
   $("#installBtn").hidden=!installEvt;
-  $("#installText").textContent=ios
+  $("#installText").textContent=isIOS
     ?"No Safari, toque em Compartilhar (o quadrado com a seta) e depois em \"Adicionar à Tela de Início\"."
     :installEvt?"Toque no botão abaixo para colocar o ícone na tela inicial.":"No Chrome, abra o menu ⋮ e toque em \"Instalar app\" ou \"Adicionar à tela inicial\".";
 }
@@ -557,8 +771,18 @@ $("#installBtn").onclick=async()=>{if(!installEvt)return;installEvt.prompt();try
 let wake=null;
 async function keepAwake(){try{if(!wake&&"wakeLock" in navigator&&document.visibilityState==="visible"){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}}catch(e){}}
 
+/* ---------- feel like an app, not a web page ---------- */
+document.addEventListener("contextmenu",e=>{if(!e.target.closest("input,textarea,.linkbox"))e.preventDefault()});
+["gesturestart","gesturechange"].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
+document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false});
+
 /* ---------- start ---------- */
-if("serviceWorker" in navigator&&location.protocol!=="file:"){navigator.serviceWorker.register("sw.js").catch(()=>{})}
+if("serviceWorker" in navigator&&location.protocol!=="file:"){
+  /* a new version was published: reload once so everyone runs the same app */
+  const hadController=!!navigator.serviceWorker.controller;let reloaded=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(hadController&&!reloaded){reloaded=true;location.reload()}});
+  navigator.serviceWorker.register("sw.js").then(r=>{try{r.update()}catch(e){}}).catch(()=>{});
+}
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);
 else{
@@ -566,5 +790,5 @@ else{
   if(saved&&saved.mesa&&API&&isStandalone())openMesa(last);else render();
 }
 window.addEventListener("hashchange",()=>{const h=(location.hash||"").replace("#","").toUpperCase();if(h.length===4&&API&&(!L||h!==L.codigo))openMesa(h)});
-window.PORTI_DEBUG={state:()=>L,sync:syncNow};
+window.PORTI_DEBUG={state:()=>L,sync:syncNow,sound:()=>({on:soundOn,ready:soundReady,state:ac&&ac.state})};
 })();

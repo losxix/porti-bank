@@ -1,6 +1,6 @@
 /* PORTI BANK — guarda o app no celular para abrir mesmo sem internet.
    Os dados da partida (Supabase) nunca passam por aqui. */
-const CACHE = "porti-bank-v1";
+const CACHE = "porti-bank-v2";
 const SHELL = [
   "./", "index.html", "app.js", "config.js", "manifest.webmanifest",
   "icon-192.png", "icon-512.png", "apple-touch-icon.png",
@@ -11,7 +11,7 @@ const SHELL = [
 self.addEventListener("install", e => {
   // One file failing (a slow CDN, for example) must not stop the rest from being saved.
   e.waitUntil(caches.open(CACHE)
-    .then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null))))
+    .then(c => Promise.all(SHELL.map(u => c.add(new Request(u, { cache: "reload" })).catch(() => null))))
     .then(() => self.skipWaiting()));
 });
 
