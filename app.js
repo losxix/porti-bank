@@ -1419,7 +1419,7 @@ document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()}
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
 window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
 /* ================= CARTAS (UI) ================= */
-var cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
+var cdOpen=null,cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
 function cardOwnerHTML(t,D){
   if(t.dono){const p=D.P[t.dono];return `<span class="mown">${p?avatar(p):""}<b>${esc(p?p.nome:"?")}</b></span>`}
   if(t.oferta){const p=D.P[t.oferta];return `<span class="mown offer">Oferecida a ${esc(p?shortName(p.nome):"?")}</span>`}
@@ -1437,7 +1437,7 @@ function miniCard(c,t,D){
     <span class="mbody"><span class="mprice">${money(c.preco)}</span>${cardOwnerHTML(t,D)}${housesHTML(c,t)}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
 }
 function openCards(filter){
-  closeSheets();cdFilter=filter||"all";
+  closeSheets();cdFilter=filter||"all";cdOpen=null;
   $("#scrim").hidden=false;$("#cardsSheet").hidden=false;$("#cdBody").scrollTop=0;drawCards();
   if(titOff)toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");
 }
@@ -1448,7 +1448,11 @@ function drawCards(){
   const free=Object.keys(CARDS).filter(id=>!Tit(+id).dono).length;
   $("#cdSub").textContent=`${free} livres no banco · ${28-free} com jogadores`;
   $("#cdDrop").hidden=!boss;
-  if(boss)$("#cdPpl").innerHTML=people.map(p=>`<div class="cdp" data-drop="${esc(p.id)}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} cartas</span></div>`).join("");
+  if(boss){
+    if(cdOpen&&!D.P[cdOpen])cdOpen=null;
+    $("#cdPpl").innerHTML=people.map(p=>`<button type="button" class="cdp${cdOpen===p.id?" open":""}" data-drop="${esc(p.id)}" aria-expanded="${cdOpen===p.id}" style="--pc2:${colorOf(p.cor).c}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} cartas</span></button>`).join("");
+    drawOwned(D);
+  }
   if(cdFilter!=="all"&&cdFilter!=="free"&&cdFilter!=="mine"&&!D.P[cdFilter])cdFilter="all";
   const chips=[["all","Todas"],["free","Livres"],["mine","Minhas"]].map(([k,l])=>`<button type="button" data-cf="${k}" aria-pressed="${cdFilter===k}">${l}</button>`).join("")
     +people.filter(p=>p.id!==L.me).map(p=>`<button type="button" data-cf="${esc(p.id)}" aria-pressed="${cdFilter===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("");
@@ -1461,6 +1465,30 @@ function drawCards(){
   $("#cdGroups").innerHTML=html||'<p class="empty">Nenhuma carta aqui.</p>';
   if(!b3.ptrs.size&&!b3full())drawBoard3d();
 }
+/* banqueiro: toque no nome da pessoa para ver (ou esconder) as cartas dela */
+function ownChip(c,t){
+  const info=!t.dono?"Esperando confirmar":t.hipotecada?"Hipotecada":c.acao?`Dados × ${short(c.mult)}`:t.casas>=5?"Condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:money(c.preco);
+  return `<button type="button" class="cdo${t.hipotecada?" hip":""}${t.dono?"":" pend"}" data-ocard="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor}"><span class="cdob">${esc(c.nome)}</span><span class="cdom">${info}</span></button>`;
+}
+function drawOwned(D){
+  const box=$("#cdOwn"),p=cdOpen&&D.P[cdOpen];
+  if(!p){box.hidden=true;box.innerHTML="";return}
+  const old=box.querySelector(".cdorow"),sl=old?old.scrollLeft:0;
+  const order=GRUPOS.flatMap(g=>g.ids);
+  const ids=Object.keys(CARDS).map(Number).filter(id=>{const t=D.Tit[id];return t&&(t.dono===p.id||(!t.dono&&t.oferta===p.id))}).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const own=ids.filter(id=>D.Tit[id].dono===p.id).length,pend=ids.length-own;
+  box.style.setProperty("--pc2",colorOf(p.cor).c);
+  box.innerHTML=`<div class="cdoh"><b>Cartas de ${esc(shortName(p.nome))}</b><span>${own} ${own===1?"carta":"cartas"}${pend?` · ${pend} esperando`:""}</span></div>`+
+    (ids.length?`<div class="cdorow">${ids.map(id=>ownChip(CARDS[id],D.Tit[id])).join("")}</div>`:`<p class="cdoe">Ainda sem cartas. Segure uma carta livre e arraste até ${esc(shortName(p.nome))}.</p>`);
+  box.hidden=false;
+  const row=box.querySelector(".cdorow");if(row)row.scrollLeft=sl;
+}
+$("#cdPpl").addEventListener("click",e=>{
+  if(cdDrag||cdDragJust)return;
+  const b=e.target.closest(".cdp");if(!b)return;
+  cdOpen=cdOpen===b.dataset.drop?null:b.dataset.drop;play("tap");drawCards();
+});
+$("#cdOwn").addEventListener("click",e=>{const b=e.target.closest("[data-ocard]");if(!b)return;play("tap");openCard(+b.dataset.ocard)});
 $("#aCards").onclick=()=>{play("tap");openCards("all")};
 $("#cdClose").onclick=closeSheets;
 $("#cdFilter").addEventListener("click",e=>{const b=e.target.closest("[data-cf]");if(!b)return;cdFilter=b.dataset.cf;play("tap");drawCards()});
@@ -1684,6 +1712,9 @@ function b3pos(i){
   if(i<=30)return{r:1,c:1+(i-20),rot:2,inx:0,iny:1};
   return{r:1+(i-30),c:11,rot:3,inx:-1,iny:0};
 }
+/* peão do dono: sempre de frente para a câmera (é redondo, então fica certo de qualquer ângulo) */
+const PAWN_SHAPES='<path d="M5 55.5C5 52 9.5 50.5 20 50.5S35 52 35 55.5V57.5C35 61 30 62.5 20 62.5S5 61 5 57.5Z"/><path d="M14.5 26C14.5 37 9 44 8.5 51.5H31.5C31 44 25.5 37 25.5 26Z"/><ellipse cx="20" cy="25.5" rx="9.5" ry="3"/><circle cx="20" cy="13" r="10"/>';
+const PAWN=`<svg class="b3pawn" viewBox="0 0 40 64" aria-hidden="true"><g class="pw-c">${PAWN_SHAPES}</g><g fill="url(#pbShade)">${PAWN_SHAPES}</g><ellipse cx="16" cy="9" rx="3.2" ry="4.2" fill="#fff" fill-opacity=".6"/><path d="M16.3 29C16.3 38 13 44 12.4 50" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 function cubeHTML(x,y,w,d,h,top,side,front){
   const f=(st)=>`<i style="${st}"></i>`;
   return `<div class="cube" style="left:${x-w/2}px;top:${y-d/2}px;width:${w}px;height:${d}px">`+
@@ -1712,7 +1743,8 @@ function drawBoard3d(){
       let houses="";
       if(t.casas>=5)houses=cubeHTML(hx,hy,22,22,26,"#FF9B70","#C5512A","#E0582F");
       else for(let k=0;k<t.casas;k++){const off=(k-(t.casas-1)/2)*12;houses+=cubeHTML(hx+(p.inx?0:off),hy+(p.iny?0:off),10,10,10,"#8BE596","#2E8B44","#3FAA55")}
-      extra=`<div class="b3houses" style="transform:translateZ(1px)">${houses}</div><div class="b3pin" style="transform:translate(${px}px,${py}px) translateZ(2px)"><div class="b3stand" style="--oc:${oc}">${avatar(own)}</div></div>`;
+      const sparks=t.hipotecada?"":`<b style="--d:${-((c.id*37)%28)/10}s"></b><b style="--d:${-((c.id*53)%28)/10}s"></b><b style="--d:${-((c.id*71)%28)/10}s"></b>`;
+      extra=`<div class="b3aura"><i class="n"></i><i class="s"></i><i class="w"></i><i class="e"></i>${sparks}</div><div class="b3houses" style="transform:translateZ(1px)">${houses}</div><div class="b3pin" style="transform:translate(${px}px,${py}px) translateZ(2px)"><div class="b3stand" style="--oc:${oc}">${PAWN}</div></div>`;
     }
     h+=`<div class="b3t r${p.rot}${c.acao?" acao":" prop"}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}" data-b3="${c.id}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}${c.acao?"":`;--sky:${skyline(c.id)}`}"><div class="b3in"><span class="b3nm">${esc(c.nome)}${c.acao?"":`<small>${esc(c.pais)}</small>`}</span><span class="b3pr">$${c.preco.toLocaleString("pt-BR")}</span></div>${extra}</div>`;
   });
