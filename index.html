@@ -466,7 +466,7 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
       <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
         <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
       <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="tx" id="txList"></div></div>
-      <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Mudar os valores da mesa</button></div>
+      <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Mudar os valores da mesa</button><button class="priv" id="hideRuleBtn" role="switch" aria-checked="true" hidden><span><b>Deixar os jogadores esconderem o saldo</b><span class="s" id="hideRuleSub">Ligado: cada um pode esconder o próprio saldo da mesa.</span></span><span class="sw2"></span></button></div>
       <div class="foot">
         <span class="muted num" style="font-size:12.5px" id="rules"></span>
         <span style="display:flex;gap:16px"><button class="link" id="switchBtn">Trocar cartão</button><button class="link" id="leaveBtn" style="color:var(--neg)">Sair da mesa</button><button class="link" id="refreshBtn">Atualizar app</button></span>
@@ -524,8 +524,8 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 <div class="toast" id="toast" hidden role="status"><span id="toastText"></span><button id="toastBtn" hidden></button></div>
 
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="vendor/qrcode.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
