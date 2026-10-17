@@ -936,11 +936,11 @@ const RMETA={
   "Sorte/Revés":{c:"#4FD69C",d:"M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.8 6.2a2.3 2.3 0 1 1 3.2 2.1c-.7.3-1 .8-1 1.5M12 16.5h.01"},
   "Venda ao banco":{c:"#46D3D9",d:"M3 10 12 4l9 6M5 10v8M19 10v8M3 20h18M12 9v8m-3-3 3 3 3-3"},
   "Hipoteca":{c:"#E8A87C",d:"M7 3h7l4 4v14H7V3Zm7 0v4h4M10 17h5M10 13.5h5"},
-  "Prêmio":{c:"#FFD12B",d:"M8 4h8v5a4 4 0 0 1-8 0V4Zm0 2H5a3 3 0 0 0 3 4m8-4h3a3 3 0 0 1-3 4M12 13v4m-4 3h8l-1-3H9l-1 3"},
+  "Prêmio":{c:"#FF9EC4",d:"M8 4h8v5a4 4 0 0 1-8 0V4Zm0 2H5a3 3 0 0 0 3 4m8-4h3a3 3 0 0 1-3 4M12 13v4m-4 3h8l-1-3H9l-1 3"},
   "Passou pela partida":{c:"#FFE79B",d:"M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"},
   "Ajuste de saldo":{c:"#D9D3C7",d:"M5 6h14M5 12h14M5 18h14M9 4v4M15 10v4M8 16v4"}
 };
-function rIcon(r){const m=RMETA[r];return m?`<span class="rbadge"><svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg></span>`:""}
+function rIcon(r){if(r==="Passou pela partida")return `<span class="rbadge" style="--rc:#FFD12B"><svg class="ric go" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-orbit"/></svg></span>`;const m=RMETA[r];return m?`<span class="rbadge"><svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg></span>`:""}
 function rStyle(r){const m=RMETA[r];return m?` style="--rc:${m.c}"`:""}
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
 function quickValues(){
