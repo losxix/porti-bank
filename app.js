@@ -1961,20 +1961,22 @@ document.querySelector(".b3dtools").addEventListener("click",e=>{const b=e.targe
   if(v==="top"){b3.pitch=1;b3.yaw=0}else if(v==="tilt"){b3.pitch=52;b3.yaw=-18}else if(v==="+")b3.zoom=Math.min(4,b3.zoom+1);else b3.zoom=Math.max(-1,b3.zoom-1);
   $("#b3dBoard").style.transition=$("#b3dCam").style.transition="transform .35s ease";b3cam();setTimeout(()=>{$("#b3dBoard").style.transition=$("#b3dCam").style.transition=""},360);play("tap")});
 const b3s=$("#b3dStage");
-b3s.addEventListener("pointerdown",e=>{b3s.setPointerCapture(e.pointerId);b3.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});b3.moved=0;b3.t0=Date.now();b3.last=null});
+b3s.addEventListener("pointerdown",e=>{b3s.setPointerCapture(e.pointerId);b3s.classList.add("moving");clearTimeout(b3MoveT);b3.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});b3.moved=0;b3.t0=Date.now();b3.last=null});
 b3s.addEventListener("pointermove",e=>{
   if(!b3.ptrs.has(e.pointerId))return;
   const prev=b3.ptrs.get(e.pointerId);b3.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(b3.ptrs.size===1){const dx=e.clientX-prev.x,dy=e.clientY-prev.y;b3.moved+=Math.abs(dx)+Math.abs(dy);b3.yaw-=dx*.35;if(b3full()||e.pointerType==="mouse")b3.pitch=Math.max(1,Math.min(72,b3.pitch-dy*.3));b3cam()}
   else if(b3.ptrs.size===2&&b3full()){const[a,b]=[...b3.ptrs.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(b3.last){b3.zoom=Math.max(-1,Math.min(4,b3.zoom+Math.log(d/b3.last)/Math.log(1.25)));b3cam()}b3.last=d;b3.moved+=99}
 });
-function b3up(e){
+let b3MoveT=null;
+function b3still(){clearTimeout(b3MoveT);b3MoveT=setTimeout(()=>{if(!b3.ptrs.size)b3s.classList.remove("moving")},250)}
+function b3up(e){b3still();
   const tap=b3.ptrs.size===1&&b3.moved<8&&Date.now()-b3.t0<400;
   b3.ptrs.delete(e.pointerId);b3.last=null;
   if(tap){const el=document.elementFromPoint(e.clientX,e.clientY);const t=el&&el.closest("[data-b3]");if(t){play("tap");openCard(+t.dataset.b3);$("#cardSheet").classList.add("over3d")}}
 }
-b3s.addEventListener("pointerup",b3up);b3s.addEventListener("pointercancel",e=>{b3.ptrs.delete(e.pointerId);b3.last=null});
-b3s.addEventListener("wheel",e=>{if(!b3full())return;e.preventDefault();b3.zoom=Math.max(-1,Math.min(4,b3.zoom-e.deltaY/300));b3cam()},{passive:false});
+b3s.addEventListener("pointerup",b3up);b3s.addEventListener("pointercancel",e=>{b3.ptrs.delete(e.pointerId);b3.last=null;b3still()});
+b3s.addEventListener("wheel",e=>{if(!b3full())return;e.preventDefault();b3s.classList.add("moving");b3still();b3.zoom=Math.max(-1,Math.min(4,b3.zoom-e.deltaY/300));b3cam()},{passive:false});
 window.addEventListener("resize",()=>{if(!$("#b3d").hidden)b3cam()});
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);

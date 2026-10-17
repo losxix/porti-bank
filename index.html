@@ -937,6 +937,13 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 @keyframes auraUp{0%{transform:translateZ(0);opacity:0}15%{opacity:1}100%{transform:translateZ(40px);opacity:0}}
 .b3t.hip .b3aura::before,.b3t.hip .b3aura i{animation:none;opacity:.22}
 .b3t.hip .b3t.dim .b3aura{display:none}
+/* Safari: nothing shares a height with the dark board, so it never flashes through */
+#b3dBoard{background:transparent}
+#b3dBoard .b3t{transform:translateZ(.6px)}
+#b3dBoard .b3center{transform:translateZ(.3px)}
+/* while the board is being turned or zoomed the effects pause, so the phone keeps up */
+.b3dstage.moving .b3aura::before,.b3dstage.moving .b3aura i,.b3dstage.moving .bld .lamp{animation-play-state:paused}
+.b3dstage.moving .b3aura b{visibility:hidden}
 /* Safari: name and photo sit clearly above the glow so they never flicker under it */
 .b3t.own .b3in{transform:translateZ(3px)}
 .b3t.own.r1 .b3in{transform:translateZ(3px) rotate(90deg)}
