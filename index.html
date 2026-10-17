@@ -380,7 +380,13 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .swbg.go.ferias{background:#0aa0de}
 .swbg.go.preso{background:#17181c}
 .pl.armed{box-shadow:inset 0 0 0 3px #FFD12B}
-.pl.jailed .nm{background:repeating-linear-gradient(90deg,transparent 0 9px,rgba(43,45,51,.55) 9px 12px);border-radius:8px}
+.pl.jailed{background:color-mix(in oklab,#252329 7%,var(--surface))}
+.pl.jailed .avatar{position:relative;overflow:hidden;filter:grayscale(.55) contrast(.95)}
+.pl.jailed .avatar::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+ background:
+  linear-gradient(180deg,transparent 28%,#f1f3f6 28% 33%,#7d828c 33% 40%,transparent 40% 70%,#f1f3f6 70% 75%,#7d828c 75% 82%,transparent 82%),
+  repeating-linear-gradient(90deg,transparent 0 5px,#5d626b 5px 6px,#eef0f4 6px 7.5px,#8f949d 7.5px 9px,transparent 9px 11px);
+ box-shadow:inset 0 0 0 2px #25232966}
 .pl.vac{background:color-mix(in oklab,#50bee6 12%,var(--surface))}
 .vactag{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:800;color:#0b6e99}
 .jailtag{font-size:10px;letter-spacing:.06em}
