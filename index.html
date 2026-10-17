@@ -830,7 +830,7 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3dstage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;perspective:1300px;perspective-origin:50% 45%;cursor:grab}
 .b3dcam{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d}
 .b3dboard{position:absolute;left:-340px;top:-340px;width:680px;height:680px;display:grid;grid-template-columns:1.55fr repeat(9,1fr) 1.55fr;grid-template-rows:1.55fr repeat(9,1fr) 1.55fr;background:#1b1a21;border:6px solid #0b0a0e;border-radius:14px;box-shadow:0 0 0 3px #3b3946;transform-style:preserve-3d}
-.b3dboard::after{content:"";position:absolute;inset:-6px;transform:translateZ(-14px);background:#0b0a0e;border-radius:14px}
+.b3dboard::before{content:"";position:absolute;inset:-6px;transform:translateZ(-14px);background:#0b0a0e;border-radius:14px}
 .b3center{grid-row:2/11;grid-column:2/11;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:radial-gradient(circle,#2c2b35,#16151b 70%);border:2px solid #0b0a0e;transform-style:preserve-3d}
 .b3center img{width:150px;transform:translateZ(6px)}
 .b3center b{font-family:var(--display);font-size:46px;letter-spacing:6px;color:#c9a35c;transform:translateZ(3px);text-shadow:0 3px 0 #000}
@@ -870,7 +870,7 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3exp{position:absolute;right:12px;bottom:12px;z-index:3;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;border-radius:12px;border:1.5px solid #000;background:#fff8e8;color:#252329;font:inherit;font-weight:800;font-size:13px;box-shadow:1px 2px 0 #000}
 .b3exp svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .b3dboard{background:#0b0a0e;border:9px solid #08070a;border-radius:10px;box-shadow:0 0 0 2px #2e2c36,0 30px 60px #0009}
-.b3dboard::after{transform:translateZ(-18px);background:#050407;inset:-9px;border-radius:10px}
+.b3dboard::before{transform:translateZ(-18px);background:#050407;inset:-9px;border-radius:10px}
 .b3t{border:1px solid #050407;background:#e9e9ec;color:#fff}
 .b3t.prop{background:linear-gradient(180deg,var(--gc),color-mix(in oklab,var(--gc) 55%,#000))}
 .b3t.prop .b3in{background:var(--sky) center bottom/100% 62% no-repeat}
