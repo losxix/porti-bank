@@ -356,6 +356,18 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .avatar.big{width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;max-width:52px!important;max-height:52px!important;flex:0 0 52px!important;border-width:3px!important}
 .avatar.sm{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;flex:0 0 24px!important;border-width:2px!important}
 .pl .nm{overflow:visible!important;height:auto!important;padding:3px 0!important}
+
+/* laps */
+.laps{display:flex;flex-direction:column;border:2px solid var(--edge,var(--line));border-radius:20px;background:var(--surface);overflow:hidden}
+.lap{display:flex;align-items:center;gap:10px;padding:11px 13px}
+.lap+.lap{border-top:1px solid var(--line)}
+.lap.behind{background:color-mix(in oklab,#FFD12B 18%,var(--surface))}
+.lapinfo{flex:1;min-width:0;display:flex;flex-direction:column}
+.lapinfo b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lapinfo span{font-size:12px;color:var(--muted)}
+.lapbtn{width:auto!important;padding:9px 12px!important;font-size:13px!important;flex:none}
+.lapn{font-family:var(--mono);font-weight:800;font-size:18px}
+#shQuick .minus{opacity:.85}
 </style>
 </head>
 <body>
@@ -463,6 +475,7 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
       <button class="priv" id="photoBtn" type="button"><span class="avatar big" id="photoPrev"></span><span><b>Minha foto</b><span class="s" id="photoSub">Aparece no ranking da mesa. Toque para escolher.</span></span></button>
       <input type="file" id="photoIn" accept="image/*" hidden>
       <button class="priv" id="privBtn" role="switch" aria-checked="false"><svg class="privEye" id="privEye" aria-hidden="true"><use href="#pe-eye"/></svg><span><b>Esconder meu saldo da mesa</b><span class="s" id="privSub">Os outros jogadores veem seu saldo no ranking</span></span><span class="sw2"></span></button>
+      <div class="lapsbox"><h2>Voltas pela partida</h2><p class="hint" id="lapsHint" style="margin:-4px 0 10px"></p><div class="laps" id="laps"></div></div>
       <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
         <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
       <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="tx" id="txList"></div></div>

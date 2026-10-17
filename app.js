@@ -500,6 +500,17 @@ function render(){
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
       <span class="bar"><i style="width:${w}%;background:${cc}"></i></span></button>`}).join("");
 
+  /* laps: how many times each player got the GO money */
+  {const laps={},lastLap={};
+   for(const t of txs){if(t.motivo==="Passou pela partida"&&t.para&&counts(t)){laps[t.para]=(laps[t.para]||0)+1;if(!lastLap[t.para])lastLap[t.para]=t.feito_em}}
+   const mx=Math.max(0,...all.map(p=>laps[p.id]||0));
+   $("#laps").innerHTML=all.map(p=>{
+     const n=laps[p.id]||0,ago=lastLap[p.id]?Math.max(0,Math.round((Date.now()-tms(lastLap[p.id]))/60000)):null;
+     const behind=n<mx&&!p.situacao;
+     const sit=p.situacao==="preso"?"na cadeia":p.situacao==="ferias"?"de férias":"";
+     return `<div class="lap ${behind?"behind":""}">${avatar(p,"sm")}<div class="lapinfo"><b>${esc(p.nome)}</b><span>${n} ${n===1?"volta":"voltas"}${ago!==null?" · última há "+(ago<1?"menos de 1 min":ago+" min"):""}${sit?" · "+sit:""}${behind?" · está atrás":""}</span></div>${boss?`<button class="btn small lapbtn" data-lap="${esc(p.id)}" ${p.situacao?"disabled":""}>+ ${short(L.mesa.salario)}</button>`:`<span class="lapn">${n}</span>`}</div>`}).join("");
+   $("#lapsHint").textContent=boss?"Toque em + quando o jogador passar pela partida. Quem está na cadeia ou de férias não recebe.":"Quantas vezes cada um recebeu a partida. Quem está atrás pode ter passado sem receber: avise o banqueiro.";}
+
   /* statement: everything that happened at the table */
   const tl=$("#txList");
   if(!txs.length){tl.innerHTML='<p class="empty">Nenhum lançamento ainda. O primeiro pagamento aparece aqui em todos os celulares.</p>';return}
@@ -620,6 +631,12 @@ document.addEventListener("click",e=>{
     const id=b.dataset.undo;
     if(armedUndo!==id){armedUndo=id;clearTimeout(armT);armT=setTimeout(()=>{armedUndo=null;render()},4000);play("tap");render();return}
     armedUndo=null;estornar(id);
+  }
+  else if(b.dataset.lap){
+    if(!iAmBanker())return;const id=b.dataset.lap,p=derive().P[id];if(!p||p.situacao)return;
+    b.disabled=true;setTimeout(()=>{b.disabled=false},1500);
+    const r=lancar(null,id,L.mesa.salario,"Passou pela partida");play("go");
+    toast(p.nome+" passou pela partida: + "+money(L.mesa.salario),{label:"Desfazer",run:()=>estornar(r.id)});
   }
   else if(b.dataset.actor){play("tap");openSheet("pay",b.dataset.actor)}
   else if(b.dataset.bank){
@@ -763,17 +780,21 @@ let SH={kind:"pay",actor:null,to:null,note:""};
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
 function quickValues(){
   const s=L.mesa.saldo_inicial,p=L.mesa.salario;
-  if(s>=1e6||p>=1e5)return[10000,45000,100000,250000,300000];
+  if(s>=1e6||p>=1e5)return[1000,10000,45000,100000,250000,300000];
   if(s>=10000)return[100,500,1000,5000];
   return[10,50,100,500];
+}
+function chipsHTML(){
+  const v=quickValues(),minus=v.slice(0,4);
+  return v.map(x=>`<button data-add="${x}">+${short(x)}</button>`).join("")+minus.map(x=>`<button data-add="-${x}" class="minus">−${short(x)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
 }
 function setAmount(n){$("#shAmount").value=n?"$ "+n.toLocaleString("pt-BR"):""}
 function openSheet(kind,actor){
   if(L.me&&!iAmBanker()){const me=derive().P[L.me];if(me&&me.situacao){toast(me.situacao==="ferias"?"Você está de férias: só o banqueiro mexe na sua conta.":"Você está na cadeia: só o banqueiro mexe na sua conta.");play("err");return}}
   if(kind==="set"&&!iAmBanker())kind="pay";
-  SH={kind,actor:actor||L.me,to:null,note:""};
+  SH={kind,actor:actor||L.me,to:kind==="pay"?"bank":null,note:""};
   setAmount(0);closeCalc();
-  $("#shQuick").innerHTML=quickValues().map(v=>`<button data-add="${v}">+${short(v)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+  $("#shQuick").innerHTML=chipsHTML();
   $("#scrim").hidden=false;$("#sheet").hidden=false;
   drawSheet();
 }
@@ -799,10 +820,11 @@ function drawSheet(){
   if(SH.kind==="set"){
     const avg=tableAverage(D,a);
     $("#shHint").innerHTML=`Para corrigir o saldo, ou equilibrar quem entrou no meio do jogo. O banco lança a diferença no extrato.`;
-    $("#shQuick").innerHTML=[[L.mesa.saldo_inicial,"Início "+short(L.mesa.saldo_inicial)],[avg,"Média da mesa "+short(avg)]].map(([v,l])=>`<button data-setval="${v}">${l}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+    $("#shQuick").innerHTML=[[L.mesa.saldo_inicial,"Início "+short(L.mesa.saldo_inicial)],[avg,"Média da mesa "+short(avg)]].map(([v,l])=>`<button data-setval="${v}">${l}</button>`).join("")+chipsHTML();
+    if($("#shAmount").value==="")setAmount(bal);
   }else{
     $("#shHint").textContent="Dinheiro do banco só cai depois que o banqueiro aprovar.";
-    if($("#shQuick").querySelector("[data-setval]"))$("#shQuick").innerHTML=quickValues().map(v=>`<button data-add="${v}">+${short(v)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+    if($("#shQuick").querySelector("[data-setval]"))$("#shQuick").innerHTML=chipsHTML();
   }
   const others=playersArr(D).filter(x=>x.id!==a);
   $("#shTo").innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}">${x.cor?avatar(x,"sm"):""}${esc(x.id===L.me?x.nome+" (você)":x.nome)}</button>`).join("");
@@ -825,7 +847,7 @@ function drawSheet(){
     if(has&&d!==0)warn.textContent=(d>0?"O banco paga ":"O banco recebe ")+money(Math.abs(d));
   }
 }
-$("#shTabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;SH.kind=b.dataset.kind;SH.to=null;SH.note="";setAmount(0);closeCalc();play("tap");drawSheet()});
+$("#shTabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;SH.kind=b.dataset.kind;SH.to=SH.kind==="pay"?"bank":null;SH.note="";setAmount(0);closeCalc();play("tap");drawSheet()});
 $("#shClose").onclick=closeSheets;$("#scrim").onclick=closeSheets;
 $("#shAmount").addEventListener("input",e=>{const raw=e.target.value;setAmount(raw.replace(/\D/g,"")===""?0:parseAmt(raw));if(raw.replace(/\D/g,"")==="")e.target.value="";drawSheet()});
 $("#sheet").addEventListener("click",e=>{
@@ -833,7 +855,7 @@ $("#sheet").addEventListener("click",e=>{
   if(b.dataset.to){SH.to=b.dataset.to;play("tap");drawSheet()}
   else if(b.dataset.note){SH.note=SH.note===b.dataset.note?"":b.dataset.note;play("tap");drawSheet()}
   else if(b.dataset.setval){setAmount(+b.dataset.setval);play("tap");drawSheet()}
-  else if(b.dataset.add!==undefined){const v=+b.dataset.add;setAmount(v?parseAmt($("#shAmount").value)+v:0);play("tap");drawSheet()}
+  else if(b.dataset.add!==undefined){const v=+b.dataset.add;setAmount(v?Math.max(0,parseAmt($("#shAmount").value)+v):0);play("tap");drawSheet()}
 });
 
 /* calculator: dice × value per point */
