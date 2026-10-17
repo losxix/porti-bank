@@ -1418,7 +1418,7 @@ document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()}
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
 window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
 /* ================= CARTAS (UI) ================= */
-var cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null;
+var cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
 function cardOwnerHTML(t,D){
   if(t.dono){const p=D.P[t.dono];return `<span class="mown">${p?avatar(p):""}<b>${esc(p?p.nome:"?")}</b></span>`}
   if(t.oferta){const p=D.P[t.oferta];return `<span class="mown offer">Oferecida a ${esc(p?shortName(p.nome):"?")}</span>`}
@@ -1430,7 +1430,10 @@ function housesHTML(c,t){
   return `<span class="mhouses">${[1,2,3,4].map(i=>`<i class="${t.casas>=i?"on":""}"></i>`).join("")}</span>`;
 }
 function miniCard(c,t,D){
-  return `<button type="button" class="mcard${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}" data-card="${c.id}" style="--gc:${c.cor}"><span class="mband">${esc(c.nome)}<small>${esc(c.pais)}</small></span><span class="mbody"><span class="mprice">${money(c.preco)}</span>${cardOwnerHTML(t,D)}${housesHTML(c,t)}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
+  return `<button type="button" class="mcard${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}${t.hipotecada?" hip":""}" data-card="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor}">
+    <span class="mtop">TÍTULO DE POSSE<i>${c.id}</i></span>
+    <span class="mband"><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></span>
+    <span class="mbody"><span class="mprice">${money(c.preco)}</span>${cardOwnerHTML(t,D)}${housesHTML(c,t)}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
 }
 function openCards(filter){
   closeSheets();cdFilter=filter||"all";
@@ -1511,7 +1514,7 @@ document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closes
 
 /* one card in detail */
 function openCard(id){
-  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;
+  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;
   $("#cardSheet").hidden=false;$("#scrim").hidden=false;$("#ccBody").scrollTop=0;drawCard();
 }
 function closeCard(){$("#cardSheet").hidden=true;if($("#cardsSheet").hidden)$("#scrim").hidden=true}
@@ -1535,47 +1538,58 @@ function drawCard(){
   }
   /* actions */
   let a="";
+  const slide=(act,label,sub,tone,extra)=>`<div class="slide ${tone||""}" data-sl="${act}"${extra||""}><div class="sl-fill"></div><span class="sl-txt">${label}${sub?`<small>${sub}</small>`:""}</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`;
+  const tile=(title,body)=>`<div class="ctile"><h4>${title}</h4>${body}</div>`;
   if(!t.dono){
-    if(t.oferta===me)a+=`<button class="btn wide" data-cc="comprar">Comprar por ${money(c.preco)}</button><button class="btn ghost wide" data-cc="recusar">Não quero</button>`;
-    if(boss&&t.oferta)a+=`<button class="btn ghost wide" data-cc="recusar">Cancelar a oferta</button>`;
+    if(t.oferta===me)a+=tile("Comprar esta carta",slide("comprar","Arraste para comprar",money(c.preco),"buy")+`<button class="btn ghost small" data-cc="recusar" type="button">Não quero</button>`);
     if(boss){
       const ppl=playersArr(D);
-      h+=`<div class="ccsec"><h2>${t.oferta?"Oferecer para outra pessoa":"Vender para"}</h2><div class="fchips">${ppl.map(p=>`<button type="button" data-offer="${esc(p.id)}" aria-pressed="${t.oferta===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div><p class="ccnote">A pessoa confirma a compra no celular dela. Na lista de cartas, você também pode segurar a carta e arrastar até a pessoa.</p></div>`;
+      if(!ccSell||!D.P[ccSell])ccSell=t.oferta||null;
+      a+=tile(t.oferta?"Vender para outra pessoa":"Vender carta",`<div class="fchips">${ppl.map(p=>`<button type="button" data-offer="${esc(p.id)}" aria-pressed="${ccSell===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>`+
+        (ccSell?slide("ofertar",`Arraste para vender a ${esc(shortName(nameOf(ccSell,D)))}`,money(c.preco)+" · a pessoa confirma no celular","buy",` data-to="${esc(ccSell)}"`):`<p class="ccnote">Escolha quem comprou. Na lista de cartas você também pode segurar a carta e arrastar até a pessoa.</p>`)+
+        (t.oferta?`<button class="btn ghost small" data-cc="recusar" type="button">Cancelar a oferta para ${esc(shortName(nameOf(t.oferta,D)))}</button>`:""));
     }
   }else if(mine||boss){
-    if(!c.acao&&!t.hipotecada&&t.casas<5)a+=`<button class="btn" data-cc="construir">${t.casas===4?"Construir condomínio":`Construir ${t.casas+1}ª casa`}<small>Paga ${money(c.casa)}</small></button>`;
-    if(!t.hipotecada)a+=`<button class="btn ghost" data-cc="hipotecar">Hipotecar<small>Recebe ${money(c.hip)}</small></button>`;
-    else a+=`<button class="btn ghost" data-cc="resgatar">Pagar hipoteca<small>Paga ${money(c.hip)}</small></button>`;
-    if(boss&&t.casas>0)a+=`<button class="btn ghost" data-cc="tirar_casa">Tirar 1 ${t.casas>=5?"(condomínio)":"casa"}<small>Sem mexer no dinheiro</small></button>`;
-    if(boss)a+=`<button class="btn ghost" data-cc="devolver">${ccArm==="devolver"?"Toque de novo para devolver":"Devolver ao banco"}<small>A carta fica livre</small></button>`;
+    if(!c.acao){
+      const hs=[1,2,3,4].map(n=>`<i class="${t.casas>=n?"on":""}"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z"/></svg></i>`).join("")+`<i class="cond ${t.casas>=5?"on":""}"><svg viewBox="0 0 24 24"><path d="M4 20V8h7v12M11 20V4h9v16M3 20h18M14 8h3M14 11h3M14 14h3M6.5 11h2M6.5 14h2"/></svg></i>`;
+      a+=tile("Construção",`<div class="chouses">${hs}</div>`+(t.hipotecada?`<p class="ccnote">Pague a hipoteca para voltar a construir.</p>`:t.casas>=5?`<p class="ccnote">Já tem condomínio. Aluguel máximo: ${money(c.al[5])}.</p>`:
+        slide("construir",t.casas===4?"Arraste para construir o condomínio":`Arraste para construir a ${t.casas+1}ª casa`,`Paga ${money(c.casa)} · aluguel vai para ${money(c.al[t.casas+1])}`,"build")));
+    }
+    a+=tile("Hipoteca",t.hipotecada?slide("resgatar","Arraste para pagar a hipoteca",`Paga ${money(c.hip)} ao banco`,"pay"):slide("hipotecar","Arraste para hipotecar",`Recebe ${money(c.hip)} do banco · para de cobrar aluguel`,"hip"));
+    if(boss)a+=tile("Banqueiro",(t.casas>0?`<button class="btn ghost small" data-cc="tirar_casa" type="button">Tirar 1 ${t.casas>=5?"(condomínio)":"casa"} · sem mexer no dinheiro</button>`:"")+slide("devolver","Arraste para devolver ao banco","A carta fica livre","danger"));
   }
-  if(a)h+=`<div class="ccacts">${a}</div>`;
+  if(a)h+=a;
   /* charge rent */
   if(owner&&!t.hipotecada){
     const others=playersArr(D).filter(p=>p.id!==t.dono);
     if(ccPayer&&!D.P[ccPayer])ccPayer=null;
     const val=rentOf(c,t,ccDice);
-    h+=`<div class="ccsec"><h2>Cobrar aluguel · quem caiu aqui?</h2><div class="fchips">${others.map(p=>`<button type="button" data-payer="${esc(p.id)}" aria-pressed="${ccPayer===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>
+    h+=`<div class="ctile"><h4>Cobrar aluguel · quem caiu aqui?</h4><div class="fchips">${others.map(p=>`<button type="button" data-payer="${esc(p.id)}" aria-pressed="${ccPayer===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>
       ${c.acao?`<div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dice="${n}" aria-pressed="${ccDice===n}">${n}</button>`).join("")}</div>`:""}
-      <div class="ccacts" style="margin-top:10px"><button class="btn wide" data-cc="cobrar" ${ccPayer&&val>0?"":"disabled"}>${ccPayer&&val>0?`${esc(shortName(nameOf(ccPayer,D)))} paga ${money(val)} para ${esc(shortName(owner.nome))}`:c.acao&&!ccDice?"Escolha quem caiu e a soma dos dados":"Escolha quem caiu aqui"}</button></div></div>`;
+      ${ccPayer&&val>0?`<div class="slide rent" data-sl="cobrar"><div class="sl-fill"></div><span class="sl-txt">Arraste: ${esc(shortName(nameOf(ccPayer,D)))} paga ${money(val)}<small>para ${esc(owner.nome)}</small></span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`:`<p class="ccnote">${c.acao&&!ccDice&&ccPayer?"Escolha a soma dos dados.":"Escolha quem caiu aqui."}</p>`}</div>`;
   }
   $("#ccBody").innerHTML=h;
 }
 $("#ccBody").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
-  if(b.dataset.offer){titOp(c.id,"ofertar",b.dataset.offer);play("pay");toast(`${c.nome} oferecida a ${nameOf(b.dataset.offer,D)}.`);drawCard();return}
+  if(b.dataset.offer){ccSell=b.dataset.offer;play("tap");drawCard();return}
   if(b.dataset.payer){ccPayer=b.dataset.payer;play("tap");drawCard();return}
   if(b.dataset.dice){ccDice=+b.dataset.dice;play("tap");drawCard();return}
   const k=b.dataset.cc;if(!k)return;
+  ccDo(k);
+
+});
+
+function ccDo(k,to){
+  const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
   if(k==="cobrar"){
     const v=rentOf(c,t,ccDice);if(!ccPayer||!v)return;
     const r=lancar(ccPayer,t.dono,v,("Aluguel: "+c.nome).slice(0,40));play("pay");
     toast(`${nameOf(ccPayer,D)} pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});
     ccPayer=null;ccDice=0;drawCard();return;
   }
-  if(k==="devolver"&&ccArm!=="devolver"){ccArm="devolver";play("tap");drawCard();setTimeout(()=>{if(ccArm==="devolver"){ccArm=null;drawCard()}},4000);return}
-  ccArm=null;
+  if(k==="ofertar"){if(!to)return;titOp(c.id,"ofertar",to);play("pay");toast(`${c.nome} oferecida a ${nameOf(to,D)}. Esperando confirmar.`);drawCard();return}
   titOp(c.id,k);
   if(k==="comprar"){play("go");toast(`Você comprou ${c.nome}!`);flashCard()}
   else if(k==="construir"){play("pay");toast(t.casas===4?`Condomínio em ${c.nome}!`:`Casa construída em ${c.nome}`)}
@@ -1584,7 +1598,38 @@ $("#ccBody").addEventListener("click",e=>{
   else if(k==="devolver"){play("undo");toast(`${c.nome} voltou para o banco`)}
   else play("tap");
   drawCard();
+}
+/* slide-to-confirm: drag the knob to the end */
+var slState=null;
+document.addEventListener("pointerdown",e=>{
+  const k=e.target.closest(".sl-knob");if(!k)return;
+  const sl=k.closest(".slide");if(!sl||sl.classList.contains("done"))return;
+  e.preventDefault();
+  const r=sl.getBoundingClientRect(),kw=k.offsetWidth;
+  slState={sl,k,x0:e.clientX,max:r.width-kw-8,dx:0};sl.classList.add("drag");
+  try{k.setPointerCapture(e.pointerId)}catch(err){}
 });
+document.addEventListener("pointermove",e=>{
+  if(!slState)return;
+  const s2=slState;s2.dx=Math.max(0,Math.min(s2.max,e.clientX-s2.x0));
+  s2.k.style.transform=`translateX(${s2.dx}px)`;s2.sl.querySelector(".sl-fill").style.width=(s2.dx+s2.k.offsetWidth+4)+"px";
+  s2.sl.classList.toggle("near",s2.dx>s2.max*.85);
+});
+function slEnd(){
+  if(!slState)return;const s2=slState;slState=null;s2.sl.classList.remove("drag","near");
+  if(s2.dx>=s2.max*.85){
+    s2.k.style.transform=`translateX(${s2.max}px)`;s2.sl.querySelector(".sl-fill").style.width="100%";s2.sl.classList.add("done");
+    try{navigator.vibrate&&navigator.vibrate(30)}catch(err){}
+    const act=s2.sl.dataset.sl,to=s2.sl.dataset.to;
+    setTimeout(()=>{if(s2.sl.closest("#offerIn"))offerDo(act);else ccDo(act,to)},180);
+  }else{
+    s2.k.style.transition="transform .25s";s2.sl.querySelector(".sl-fill").style.transition="width .25s";
+    s2.k.style.transform="";s2.sl.querySelector(".sl-fill").style.width="";
+    setTimeout(()=>{s2.k.style.transition="";s2.sl.querySelector(".sl-fill").style.transition=""},260);
+  }
+}
+document.addEventListener("pointerup",slEnd);document.addEventListener("pointercancel",slEnd);
+document.addEventListener("touchmove",e=>{if(slState)e.preventDefault()},{passive:false});
 
 /* someone offered me a card: confirm on my phone */
 let offerShown=null;
@@ -1598,15 +1643,18 @@ function drawOffer(D){
   $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
     <div class="obody"><p>O banqueiro está te vendendo essa carta.</p><div class="oprice">${money(c.preco)}</div>
     <p>${c.acao?`Aluguel: soma dos dados × ${money(c.mult)}`:`Aluguel sem casa: ${money(c.al[0])}`}</p>
-    <button class="btn" data-of="comprar">Comprar</button><button class="btn ghost" data-of="recusar">Não quero</button></div>`;
+    <div class="slide buy" data-sl="comprar"><div class="sl-fill"></div><span class="sl-txt">Arraste para comprar</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>
+    <button class="btn ghost small" data-of="recusar">Não quero</button></div>`;
   box.hidden=false;
 }
-$("#offerBox").addEventListener("click",e=>{
-  const b=e.target.closest("[data-of]");if(!b)return;
+function offerDo(k){
   const t=Object.values(derive().Tit).find(x=>x.oferta===L.me&&!x.dono);if(!t)return;
   const c=CARDS[t.carta];
-  titOp(t.carta,b.dataset.of);$("#offerBox").hidden=true;
-  if(b.dataset.of==="comprar"){play("go");flashCard();toast(`Você comprou ${c.nome}!`)}else{play("undo");toast("Compra recusada")}
+  titOp(t.carta,k);$("#offerBox").hidden=true;
+  if(k==="comprar"){play("go");flashCard();toast(`Você comprou ${c.nome}!`)}else{play("undo");toast("Compra recusada")}
+}
+$("#offerBox").addEventListener("click",e=>{
+  const b=e.target.closest("[data-of]");if(!b)return;offerDo(b.dataset.of);
 });
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);

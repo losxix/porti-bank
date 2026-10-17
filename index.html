@@ -772,6 +772,51 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .mcard{border-color:var(--edge)}
 :root[data-theme="dark"] .mcard,.mcard{box-shadow:2px 3px 0 var(--shadow)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mcard{border-color:#000}}
+
+/* ---------- cartas v2: cara de Título de Posse ---------- */
+.mcard{background:linear-gradient(160deg,#2d2c36,#17161c 70%);color:#fff8e8;border:2px solid #0d0c11!important;box-shadow:3px 4px 0 var(--shadow)!important;border-radius:16px}
+.mtop{position:relative;display:block;margin:0 auto;width:78%;padding:5px 0 4px;border-radius:0 0 40px 40px/0 0 18px 18px;background:linear-gradient(#8c6a3a,#5b4022);color:#fff3d6;font-size:8.5px;font-weight:900;letter-spacing:1px;text-align:center}
+.mtop i{position:absolute;right:-22%;top:3px;font-style:normal;font-size:9px;color:#b9b2a3;letter-spacing:0}
+.mband{margin-top:7px;padding:9px 10px 8px;background:linear-gradient(180deg,color-mix(in oklab,var(--gc) 85%,#fff),var(--gc) 60%);color:#fff;border-top:1.5px solid #0d0c11;border-bottom:1.5px solid #0d0c11;text-align:center;text-shadow:0 1px 1px #0006}
+.mband b{display:block;font-size:13.5px;line-height:1.1;text-transform:uppercase;letter-spacing:.2px}
+.mband small{display:block;font-size:10px;font-weight:700;opacity:.92;margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+.mcard.acao .mband{background:linear-gradient(180deg,#4a4a58,#2f2f3a)}
+.mbody{align-items:center;text-align:center;padding:9px 8px 11px;gap:7px}
+.mprice{font-size:14px;color:#FFD12B}
+.mown{justify-content:center;color:#b9b2a3}
+.mown b{color:#fff8e8}
+.mown.free{color:#7ee08a}.mown.offer{color:#FFD12B}
+.mhouses{justify-content:center}
+.mhouses i{border-color:#6d6878!important;border-radius:3px}
+.mhouses i.on{background:#7ee08a;border-color:#0d0c11!important}
+.mcard.mine{outline:3px solid var(--accent);outline-offset:2px}
+.mcard.hip .mband,.mcard.hip .mbody{filter:grayscale(.6) brightness(.85)}
+/* detail tiles */
+.ctile{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--surface);border:1.5px solid var(--edge);box-shadow:2px 3px 0 var(--shadow)}
+.ctile h4{margin:0;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.ctile .btn.small{min-height:42px;box-shadow:none;border-width:1.5px;font-size:13px}
+.chouses{display:flex;gap:8px;justify-content:center}
+.chouses i{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;border:1.5px dashed color-mix(in oklab,var(--edge) 40%,transparent);color:color-mix(in oklab,var(--ink) 30%,transparent)}
+.chouses i svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chouses i.on{border-style:solid;border-color:#252329;background:#7ee08a;color:#252329;box-shadow:1px 2px 0 #252329}
+.chouses i.cond{width:52px}
+.chouses i.cond.on{background:#FF8A5B}
+/* slide to confirm */
+.slide{position:relative;height:60px;border-radius:999px;border:2px solid #252329;background:#252329;overflow:hidden;box-shadow:2px 3px 0 var(--shadow);-webkit-user-select:none;user-select:none;touch-action:none;--sc:#FFD12B}
+.slide.buy{--sc:#FFD12B}.slide.build{--sc:#7ee08a}.slide.hip{--sc:#B48CFF}.slide.pay{--sc:#5AA9FF}.slide.rent{--sc:#FF8A5B}.slide.danger{--sc:#FF6B5E}
+.sl-fill{position:absolute;left:0;top:0;bottom:0;width:60px;background:var(--sc);border-radius:999px}
+.sl-txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 16px 0 66px;color:#fff8e8;font-weight:800;font-size:14.5px;line-height:1.15;text-align:center;pointer-events:none;background:linear-gradient(90deg,#fff8e8 0,#fff8e8 40%,#fff 50%,#fff8e8 60%) 0 0/200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:slShine 2.4s linear infinite}
+.sl-txt small{display:block;font-size:11px;font-weight:700;margin-top:2px;-webkit-text-fill-color:#d9d2c3;color:#d9d2c3}
+@keyframes slShine{to{background-position:-200% 0}}
+.sl-knob{position:absolute;left:4px;top:4px;width:48px;height:48px;border-radius:50%;background:var(--sc);border:2px solid #252329;display:grid;place-items:center;cursor:grab;touch-action:none;z-index:2;box-shadow:0 2px 0 #0006}
+.sl-knob svg{width:24px;height:24px;fill:none;stroke:#252329;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.slide:not(.drag):not(.done) .sl-knob{animation:slNudge 1.8s ease-in-out infinite}
+@keyframes slNudge{0%,60%,100%{transform:translateX(0)}75%{transform:translateX(10px)}}
+.slide.near .sl-txt{opacity:.4}
+.slide.done .sl-txt{opacity:0}
+.slide.done .sl-knob svg{display:none}
+.slide.done .sl-knob::after{content:"";width:12px;height:22px;border:solid #252329;border-width:0 3.5px 3.5px 0;transform:rotate(45deg) translate(-2px,-2px)}
+.offerbox .slide{margin-top:4px}
 </style>
 <link rel="stylesheet" href="porti-status.css">
 </head>
