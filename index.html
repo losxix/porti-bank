@@ -410,6 +410,47 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .bumpbtn.tapnow{min-height:64px;font-size:18px;background:#252329;color:#FFD12B;border-color:#252329}
 .bumpbtn.tapnow.hit{animation:tapHit .35s ease}
 @keyframes tapHit{40%{transform:scale(.94)}}
+
+/* cell gate overlay */
+.cell{position:fixed;inset:0;z-index:45;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:#0f0f14d9;overflow:hidden;padding:20px}
+.cell[hidden]{display:none}
+.cell.closing{animation:cellFade 2.9s ease forwards}
+.cell.opening{animation:cellFade 2.4s ease forwards}
+@keyframes cellFade{0%{opacity:0}6%,85%{opacity:1}100%{opacity:0}}
+.cell-stage{position:relative;width:min(78vw,320px);aspect-ratio:1/1.1;border-radius:22px;background:radial-gradient(120% 90% at 50% 30%,#3a3d47,#16171c 70%);border:3px solid #000;box-shadow:0 0 0 3px #2b2d33,0 18px 40px #000a;overflow:hidden}
+.cell.closing .cell-stage{animation:cellShake .5s ease .44s}
+@keyframes cellShake{0%{transform:translate(0,0)}15%{transform:translate(-7px,6px) rotate(-1deg)}30%{transform:translate(6px,-4px) rotate(.8deg)}45%{transform:translate(-4px,3px)}60%{transform:translate(3px,-2px)}80%{transform:translate(-1px,1px)}100%{transform:none}}
+.cell-who{position:absolute;inset:0;display:grid;place-items:center}
+.cell .cell-who .avatar.big{width:140px!important;height:140px!important;min-width:140px!important;min-height:140px!important;max-width:140px!important;max-height:140px!important;flex:0 0 140px!important;font-size:60px!important;border:5px solid #FFD12B!important;box-shadow:0 8px 0 #000!important}
+.cell.closing .cell-who{animation:whoFlinch .5s ease .44s}
+@keyframes whoFlinch{30%{transform:scale(.92)}}
+.gate{position:absolute;inset:-4% 0 0 0;z-index:2}
+.gbars{position:absolute;inset:0;display:flex;justify-content:space-evenly}
+.gbars i{display:block;width:7%;height:100%;border-radius:6px;background:linear-gradient(90deg,#5b5f69,#e3e6ec 35%,#9ea3ad 55%,#3c3f47);box-shadow:3px 0 6px #0008}
+.rail{position:absolute;left:-2%;right:-2%;height:6.5%;border-radius:5px;background:linear-gradient(180deg,#e7eaf0,#8d929c 60%,#4a4d55);box-shadow:0 4px 8px #0009}
+.rail.r1{top:9%}.rail.r2{top:52%}.rail.r3{bottom:2%}
+.cell.closing .gate{animation:gateDrop .62s cubic-bezier(.55,0,1,.45) both}
+@keyframes gateDrop{0%{transform:translateY(-104%)}70%{transform:translateY(0)}80%{transform:translateY(-4%)}90%{transform:translateY(0)}95%{transform:translateY(-1.2%)}100%{transform:translateY(0)}}
+.cell.opening .gate{animation:gateLift 1.5s cubic-bezier(.5,0,.3,1) .7s both}
+@keyframes gateLift{0%{transform:translateY(0)}12%{transform:translateY(2%)}100%{transform:translateY(-106%)}}
+.dust{position:absolute;left:0;right:0;bottom:0;height:20%;z-index:3;pointer-events:none}
+.dust i{position:absolute;bottom:4%;left:calc(var(--d)*10% + 3%);width:12px;height:12px;border-radius:50%;background:#d8cfbd;opacity:0}
+.cell.closing .dust i{animation:dustPuff .7s ease-out .44s both}
+.dust i:nth-child(odd){--x:-28px}.dust i:nth-child(even){--x:28px}
+@keyframes dustPuff{0%{opacity:0;transform:translate(0,0) scale(.6)}2%{opacity:.85}100%{opacity:0;transform:translate(var(--x),-46px) scale(2.4)}}
+.padlock{position:absolute;z-index:4;left:50%;top:44%;width:24%;margin-left:-12%;transform-origin:50% 0;opacity:0}
+.padlock svg{display:block;width:100%;filter:drop-shadow(0 6px 0 #000)}
+.cell.closing .padlock{animation:lockIn .55s cubic-bezier(.2,1.6,.4,1) 1.15s both}
+.cell.closing .padlock path{animation:shackle .2s ease 1.42s both}
+@keyframes lockIn{0%{opacity:0;transform:translateY(-40px) rotate(-25deg) scale(.6)}60%{opacity:1;transform:translateY(4px) rotate(10deg) scale(1.05)}80%{transform:rotate(-5deg)}100%{opacity:1;transform:none}}
+@keyframes shackle{0%{transform:translateY(-8px)}100%{transform:translateY(0)}}
+.cell.opening .padlock{opacity:1;animation:lockOut .6s ease .1s both}
+@keyframes lockOut{0%{opacity:1;transform:none}40%{transform:rotate(-12deg)}100%{opacity:0;transform:translateY(60px) rotate(40deg)}}
+.cell-txt{margin:0;padding:12px 20px;border:2.5px solid #252329;border-radius:14px;background:#FFD12B;color:#252329;box-shadow:4px 5px 0 #000;font-family:var(--display);font-size:clamp(18px,5.4vw,24px);font-weight:800;text-align:center;letter-spacing:-.4px}
+.cell.closing .cell-txt{animation:stamp .4s cubic-bezier(.2,1.8,.4,1) .55s both}
+.cell.opening .cell-txt{animation:stamp .4s cubic-bezier(.2,1.8,.4,1) 1.1s both;background:#7ee08a}
+@keyframes stamp{0%{opacity:0;transform:scale(2.2) rotate(-6deg)}100%{opacity:1;transform:rotate(-2deg)}}
+@media (prefers-reduced-motion:reduce){.cell *{animation-duration:.01s!important;animation-delay:0s!important}}
 </style>
 </head>
 <body>
@@ -584,6 +625,15 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
   <div class="sheet-h"><b id="bankTitle">Passar o banco</b><button class="link" id="bankClose">Cancelar</button></div>
   <p class="muted" style="font-size:14px">Quem receber o banco passa a aprovar os pedidos de dinheiro do banco.</p>
   <div class="claim" id="bankList"></div>
+</div>
+<div class="cell" id="cell" hidden aria-live="polite">
+  <div class="cell-stage">
+    <div class="cell-who" id="cellWho"></div>
+    <div class="gate"><div class="gbars"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i></div><b class="rail r1"></b><b class="rail r2"></b><b class="rail r3"></b></div>
+    <div class="dust"><i style="--d:0"></i><i style="--d:1"></i><i style="--d:2"></i><i style="--d:3"></i><i style="--d:4"></i><i style="--d:5"></i><i style="--d:6"></i><i style="--d:7"></i><i style="--d:8"></i><i style="--d:9"></i></div>
+    <div class="padlock" aria-hidden="true"><svg viewBox="0 0 64 72"><path d="M18 32V22a14 14 0 0 1 28 0v10" fill="none" stroke="#c9ccd3" stroke-width="7" stroke-linecap="round"/><rect x="8" y="30" width="48" height="38" rx="8" fill="#FFD12B" stroke="#252329" stroke-width="3"/><circle cx="32" cy="46" r="5" fill="#252329"/><rect x="30" y="48" width="4" height="11" rx="2" fill="#252329"/></svg></div>
+  </div>
+  <p class="cell-txt" id="cellTxt"></p>
 </div>
 <div class="eat" id="eat" hidden aria-live="polite"><div class="eat-in"><img src="banco-comeu.webp" alt="O banco comeu" width="640" height="640"><p id="eatText"></p></div><div class="bills" aria-hidden="true"></div></div>
 <div class="toast" id="toast" hidden role="status"><span id="toastText"></span><button id="toastBtn" hidden></button></div>

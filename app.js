@@ -104,10 +104,10 @@ function tone(f,t0,dur,type,vol,f2){
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol||.15,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05);
 }
-function noise(t0,dur,vol){
+function noise(t0,dur,vol,ftype,freq){
   const a=actx();if(!a||a.state!=="running")return;const b=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
-  const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();f.type="highpass";f.frequency.value=3000;g.gain.value=vol;
+  const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();f.type=ftype||"highpass";f.frequency.value=freq||3000;g.gain.value=vol;
   s.buffer=b;s.connect(f).connect(g).connect(a.destination);s.start(a.currentTime+t0);
 }
 const SFX={
@@ -123,6 +123,17 @@ const SFX={
   err(){tone(180,0,.18,"square",.07)},
   /* cell door sliding down, slamming and the key locking */
   jail(){tone(900,0,.55,"sawtooth",.05,220);noise(0,.5,.05);noise(.55,.12,.22);tone(120,.55,.35,"square",.12,70);[700,1400,2100].forEach(f=>tone(f,.56,.5,"triangle",.04));noise(1.05,.03,.18);tone(2400,1.06,.05,"square",.06);noise(1.15,.03,.18);tone(1900,1.16,.06,"square",.06)},
+  /* heavy cell gate: rattling slide down, PÁ slam with steel ringing, rattle, key click */
+  slam(){
+    noise(0,.42,.05,"bandpass",1800);tone(420,0,.42,"sawtooth",.025,160);
+    [0,.07,.14,.21,.28,.35].forEach(t=>noise(t,.02,.05,"bandpass",4200));
+    const T=.44;
+    tone(95,T,.5,"sine",.5,38);tone(60,T,.6,"sine",.35,30);
+    noise(T,.22,.5,"lowpass",900);noise(T,.06,.35,"highpass",2500);
+    [[523,.10,1.3],[1187,.07,1.0],[1861,.05,.8],[2693,.035,.6],[3520,.02,.45]].forEach(([f,v,d])=>tone(f,T+.005,d,"triangle",v,f*.985));
+    [.62,.7,.79,.9].forEach((t,i)=>{noise(t,.025,.09-i*.015,"bandpass",3000);tone(1300-i*80,t,.08,"triangle",.03)});
+    noise(1.35,.025,.2,"highpass",2000);tone(2400,1.36,.04,"square",.05);noise(1.48,.03,.22,"highpass",1800);tone(1700,1.49,.07,"square",.06)
+  },
   /* key turning and the door opening */
   unlock(){noise(0,.03,.18);tone(2200,0,.05,"square",.06);noise(.12,.03,.18);tone(2600,.12,.05,"square",.06);tone(240,.3,.5,"sawtooth",.04,700);noise(.3,.45,.04);[523,659,784].forEach((f,i)=>tone(f,.85+i*.08,.2,"triangle",.11))}
 };
@@ -271,10 +282,13 @@ function mergeRows(kind,rows,notify){
     if(kind==="mesa"){mergeMesa(r);continue}
     if(!r.id||(r.mesa&&r.mesa!==L.codigo))continue;
     if(kind==="jog"){
-      if(notify&&r.id===L.me&&(r.situacao||null)!==((L.jog[r.id]||{}).situacao||null)){
-        if(r.situacao==="preso"){toast("Você foi para a cadeia! Só o banqueiro mexe na sua conta agora.");play("jail")}
-        else if(r.situacao==="ferias"){toast("Você está de férias. Só o banqueiro mexe na sua conta agora.");play("tap")}
-        else{toast("Você está livre!");play("unlock")}
+      const wasSit=(L.jog[r.id]||{}).situacao||null;
+      if(notify&&L.jog[r.id]&&(r.situacao||null)!==wasSit){
+        const mine=r.id===L.me;
+        if(r.situacao==="preso"){cellLater(r.id,true);if(mine)toast("Você foi para a cadeia! Só o banqueiro mexe na sua conta agora.")}
+        else if(r.situacao==="ferias"){if(mine){toast("Você está de férias. Só o banqueiro mexe na sua conta agora.");play("tap")}}
+        else if(wasSit==="preso")cellLater(r.id,false);
+        else if(mine){toast("Você voltou para o jogo!");play("unlock")}
       }
       if(notify&&r.id===L.me&&r.removido&&!(L.jog[r.id]||{}).removido){toast("O banqueiro tirou seu cartão da mesa.");play("err")}
       if(notify&&!L.jog[r.id]&&!L.out.some(o=>o.t==="entrar"&&o.id===r.id))joined.push(r);
@@ -606,6 +620,22 @@ function bancoComeu(nome,valor){
   play("chomp");
 }
 $("#eat").addEventListener("click",()=>{$("#eat").hidden=true;clearTimeout(eatT)});
+/* cell gate dropping over the player, on every phone */
+let cellT,cellSeen={};
+function cellLater(id,closing){setTimeout(()=>cellShow(id,closing),30)}
+function cellShow(id,closing){
+  const now=Date.now(),k=id+(closing?"p":"s");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
+  const p=derive().P[id];if(!p)return;
+  const el=$("#cell");
+  $("#cellWho").innerHTML=avatar(p,"big");
+  $("#cellTxt").innerHTML=closing?`<b>${esc(p.nome)}</b> foi preso!`:`<b>${esc(p.nome)}</b> está livre!`;
+  el.className="cell "+(closing?"closing":"opening");
+  el.hidden=true;void el.offsetWidth;el.hidden=false;
+  el.querySelectorAll("*").forEach(n=>{n.style.animation="none";void n.offsetWidth;n.style.animation=""});
+  if(closing){play("slam");setTimeout(()=>{if(navigator.vibrate)try{navigator.vibrate([60,40,30])}catch(e){}},440)}else play("unlock");
+  clearTimeout(cellT);cellT=setTimeout(()=>el.hidden=true,closing?2900:2400);
+}
+$("#cell").addEventListener("click",()=>{$("#cell").hidden=true;clearTimeout(cellT)});
 const paysBank=r=>!!r.de&&!r.para&&r.motivo!=="Ajuste de saldo";
 
 /* ---------- actions ---------- */
@@ -737,9 +767,9 @@ $("#passBankBtn").onclick=()=>{
 $("#bankClose").onclick=closeSheets;
 $("#shJail").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b||!iAmBanker())return;
-  const a=SH.actor,v=b.dataset.sit||null,nm=nameOf(a);closeSheets();
+  const a=SH.actor,v=b.dataset.sit||null,nm=nameOf(a),was=(derive().P[a]||{}).situacao||null;closeSheets();
   enqueue({t:"situacao",id:a,situacao:v,por:L.me,em:nowIso()});
-  if(v==="preso"){play("jail");toast(nm+" foi para a cadeia!")}else if(v==="ferias"){play("tap");toast(nm+" está de férias.")}else{play("unlock");toast(nm+" está livre!")}
+  if(v==="preso")cellLater(a,true);else if(v==="ferias"){play("tap");toast(nm+" está de férias.")}else if(was==="preso")cellLater(a,false);else{play("unlock");toast(nm+" voltou para o jogo!")}
 });
 let rmT;
 $("#shRemove").onclick=e=>{
@@ -773,9 +803,9 @@ $("#valSave").onclick=()=>{
 
 /* ---------- swipe in the ranking (banker): right = vacation, left = jail ---------- */
 function setSituacao(id,v){
-  const nm=nameOf(id);
+  const nm=nameOf(id),was=(derive().P[id]||{}).situacao||null;
   enqueue({t:"situacao",id,situacao:v,por:L.me,em:nowIso()});
-  if(v==="preso"){play("jail");toast(nm+" foi para a cadeia!")}else if(v==="ferias"){play("tap");toast(nm+" está de férias 🏖️")}else{play("unlock");toast(nm+" voltou para o jogo!")}
+  if(v==="preso")cellLater(id,true);else if(v==="ferias"){play("tap");toast(nm+" está de férias 🏖️")}else if(was==="preso")cellLater(id,false);else{play("unlock");toast(nm+" voltou para o jogo!")}
 }
 $("#players").addEventListener("pointerdown",e=>{
   const row=e.target.closest(".pl");if(!row||!L||!iAmBanker())return;
