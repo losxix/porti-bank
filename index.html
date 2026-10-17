@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="PORTI BANK">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>PORTI BANK</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -341,6 +341,9 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
 .avatar{aspect-ratio:1/1;min-width:30px;max-width:30px;min-height:30px;max-height:30px;align-self:center;padding:0!important;line-height:1}
 .avatar.big{min-width:48px;max-width:48px;min-height:48px;max-height:48px}
 .avatar.sm{min-width:22px;max-width:22px;min-height:22px;max-height:22px}
+
+/* iPhone: keep the logo clear of the glass blur at the top edge */
+body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 </style>
 </head>
 <body>
