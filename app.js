@@ -470,7 +470,7 @@ function render(){
   if(sit)$("#jailBanner").textContent=(sit==="ferias"?"Você está de férias.":"Você está na cadeia.")+" Só o banqueiro pode mexer na sua conta até ele te soltar.";
   ["#aPay","#aSalary","#aRecv"].forEach(x=>{$(x).disabled=!!sit});
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
-  $("#privEye").innerHTML=`<use href="#${meP.oculto?"i-eyeoff":"i-eye"}"/>`;
+  $("#privEye").innerHTML=`<use href="#${meP.oculto?"pe-eyeoff":"pe-eye"}"/>`;
   $("#photoPrev").outerHTML=avatar(meP,"big").replace('class="avatar big"','class="avatar big" id="photoPrev"');
   $("#photoSub").textContent=meP.foto?"Aparece no ranking da mesa. Toque para trocar.":"Aparece no ranking da mesa. Toque para escolher.";
   $("#privSub").textContent=meP.oculto?"Os outros veem $ ••••• no lugar do seu saldo":"Os outros jogadores veem seu saldo no ranking";
