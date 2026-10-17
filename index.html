@@ -849,10 +849,6 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3t.hip .b3in{filter:grayscale(.8) brightness(.75)}
 .b3t.dim{opacity:.28}
 .b3t.own::before{content:"";position:absolute;inset:0;border:4px solid var(--oc);pointer-events:none;transform:translateZ(1px)}
-.b3pin{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d;pointer-events:none}
-.b3stand{position:absolute;left:-15px;bottom:0;width:30px;transform-origin:50% 100%;transform-style:preserve-3d}
-.b3stand .avatar{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;max-width:30px!important;max-height:30px!important;flex:0 0 30px!important;font-size:13px!important;border:2.5px solid var(--oc)!important;box-shadow:0 3px 0 #000!important}
-.b3stand::after{content:"";display:block;width:3px;height:22px;margin:0 auto;background:var(--oc);border-radius:2px}
 .b3houses{position:absolute;left:50%;top:50%;transform-style:preserve-3d;pointer-events:none}
 .cube{position:absolute;transform-style:preserve-3d}
 .cube i{position:absolute;display:block;border:1px solid #0b0a0e}
@@ -906,15 +902,26 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3sr{position:absolute;width:96px;height:96px;border-radius:50%;background:radial-gradient(circle,#f2f2f4,#c9c9d0);display:grid;place-items:center;text-align:center;color:#55555e;font-family:var(--display);font-size:13px;line-height:1;box-shadow:0 4px 0 #0008}
 .b3sr i{display:block;font-style:normal;font-size:9px;margin:2px 0}
 .b3sr.a{left:9%;top:7%;transform:rotate(135deg)}.b3sr.b{right:9%;bottom:7%;transform:rotate(-40deg)}
-.b3stand .avatar{box-shadow:0 3px 0 #000,0 0 0 2px #000!important}
 #b3d .b3dstage{touch-action:none}
 
-/* ---------- peões e aura de quem é dono ---------- */
-.b3stand{left:-14px;width:28px}
-.b3stand::after{display:none}
-.b3pawn{display:block;width:28px;height:45px;overflow:visible;filter:drop-shadow(0 0 3px color-mix(in oklab,var(--oc) 80%,#fff))}
-.b3pawn .pw-c{fill:var(--oc);stroke:color-mix(in oklab,var(--oc) 40%,#000);stroke-width:1.4}
-.b3pin::before{content:"";position:absolute;left:-15px;top:-7px;width:30px;height:14px;border-radius:50%;background:radial-gradient(closest-side,#000c,#0000)}
+/* ---------- aura, foto no chão e prédios de quem é dono ---------- */
+.b3own{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;border-radius:50%;box-shadow:0 0 10px 2px color-mix(in oklab,var(--oc) 80%,transparent)}
+.b3own .avatar{width:32px!important;height:32px!important;min-width:32px!important;min-height:32px!important;max-width:32px!important;max-height:32px!important;flex:0 0 32px!important;font-size:15px!important;border:2.5px solid var(--oc)!important;opacity:.92}
+.b3t.prop .b3nm,.b3t.prop .b3pr{position:relative;z-index:1}
+.b3t.own .b3nm{text-shadow:0 1px 2px #000,0 0 4px #000}
+.bld{position:absolute;transform-style:preserve-3d;--wall:#F4E7C9;--glass:#FFD35A;--roof:#2FA24E}
+.bld.condo{--wall:#D8552E;--glass:#FFE59A;--roof:#6E2A16}
+.bld i{position:absolute;display:block}
+.bld .bsh{border-radius:4px;background:#0008;filter:blur(2px)}
+.bld .wv{background:linear-gradient(90deg,var(--wall) 0 17%,#0000 17% 41%,var(--wall) 41% 59%,#0000 59% 83%,var(--wall) 83%),repeating-linear-gradient(to bottom,var(--wall) 0 2px,var(--glass) 2px calc(var(--fh) - 2px),var(--wall) calc(var(--fh) - 2px) var(--fh));box-shadow:inset 0 0 0 .6px #0006}
+.bld .wh{background:linear-gradient(180deg,var(--wall) 0 17%,#0000 17% 41%,var(--wall) 41% 59%,#0000 59% 83%,var(--wall) 83%),repeating-linear-gradient(to right,var(--wall) 0 2px,var(--glass) 2px calc(var(--fh) - 2px),var(--wall) calc(var(--fh) - 2px) var(--fh));box-shadow:inset 0 0 0 .6px #0006}
+.bld .dk{filter:brightness(.78)}
+.bld .rf{background:linear-gradient(180deg,color-mix(in oklab,var(--roof) 80%,#fff),var(--roof));box-shadow:inset 0 0 0 .6px #0007}
+.bld .rf.dk{filter:brightness(.72)}
+.bld .gb{background:color-mix(in oklab,var(--wall) 88%,#000);clip-path:polygon(0 0,100% 50%,0 100%)}
+.bld .rf.flat{background:var(--roof);box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--wall) 70%,#000)}
+.bld .ant{background:#d9d9de}
+.bld .lamp{border-radius:50%;background:#ff4040;box-shadow:0 0 6px 2px #ff4040}
 .b3t.own::before{box-shadow:inset 0 0 14px color-mix(in oklab,var(--oc) 90%,transparent),0 0 18px 2px color-mix(in oklab,var(--oc) 75%,transparent);z-index:1}
 .b3aura{position:absolute;inset:0;pointer-events:none;transform-style:preserve-3d}
 .b3aura::before{content:"";position:absolute;inset:0;background:radial-gradient(closest-side,transparent 35%,color-mix(in oklab,var(--oc) 55%,transparent));transform:translateZ(1.5px);animation:auraPulse 2.6s ease-in-out infinite}
@@ -929,8 +936,7 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 @keyframes auraPulse{0%,100%{opacity:.5}50%{opacity:1}}
 @keyframes auraUp{0%{transform:translateZ(0);opacity:0}15%{opacity:1}100%{transform:translateZ(40px);opacity:0}}
 .b3t.hip .b3aura::before,.b3t.hip .b3aura i{animation:none;opacity:.22}
-.b3t.hip .b3pawn{filter:grayscale(.6) brightness(.8)}
-.b3t.dim .b3aura{display:none}
+.b3t.hip .b3t.dim .b3aura{display:none}
 @media (prefers-reduced-motion:reduce){.b3aura::before,.b3aura i{animation:none;opacity:.75}.b3aura b{display:none}}
 
 /* ---------- cartas de cada pessoa (banqueiro) ---------- */
@@ -1122,9 +1128,6 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
 <div class="sheet tsheet" id="cardsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="cdTitle">
   <div class="sheet-h tsh"><div class="who"><div style="min-width:0"><b id="cdTitle">Cartas do jogo</b><small id="cdSub"></small></div></div><button class="xbtn" id="cdClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
   <div class="cddrop" id="cdDrop" hidden><span class="cdhint">Segure uma carta e arraste até quem comprou · toque no nome para ver as cartas</span><div class="cdppl" id="cdPpl"></div><div class="cdown" id="cdOwn" hidden></div></div>
-<svg width="0" height="0" style="position:absolute;width:0;height:0" aria-hidden="true" focusable="false"><defs>
-  <linearGradient id="pbShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset=".38" stop-color="#fff" stop-opacity=".06"/><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient>
-</defs></svg>
   <div class="tbody" id="cdBody">
     <div class="cdboard" id="cdBoardHost"><button class="b3exp" id="b3Expand" type="button"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Expandir</button></div>
     <div class="fchips" id="cdFilter"></div>

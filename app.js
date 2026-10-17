@@ -1730,9 +1730,30 @@ function b3pos(i){
   if(i<=30)return{r:1,c:1+(i-20),rot:2,inx:0,iny:1};
   return{r:1+(i-30),c:11,rot:3,inx:-1,iny:0};
 }
-/* peão do dono: sempre de frente para a câmera (é redondo, então fica certo de qualquer ângulo) */
-const PAWN_SHAPES='<path d="M5 55.5C5 52 9.5 50.5 20 50.5S35 52 35 55.5V57.5C35 61 30 62.5 20 62.5S5 61 5 57.5Z"/><path d="M14.5 26C14.5 37 9 44 8.5 51.5H31.5C31 44 25.5 37 25.5 26Z"/><ellipse cx="20" cy="25.5" rx="9.5" ry="3"/><circle cx="20" cy="13" r="10"/>';
-const PAWN=`<svg class="b3pawn" viewBox="0 0 40 64" aria-hidden="true"><g class="pw-c">${PAWN_SHAPES}</g><g fill="url(#pbShade)">${PAWN_SHAPES}</g><ellipse cx="16" cy="9" rx="3.2" ry="4.2" fill="#fff" fill-opacity=".6"/><path d="M16.3 29C16.3 38 13 44 12.4 50" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+/* prédio 3D: cada casa é um andar a mais, empilhado; o condomínio vira uma torre */
+function buildingHTML(x,y,floors,condo){
+  const w=condo?22:18,d=condo?22:18,fh=condo?7:8,H=floors*fh;
+  const f=(k,st)=>`<i class="${k}" style="${st}"></i>`;
+  let s=`<div class="bld${condo?" condo":""}" style="left:${x-w/2}px;top:${y-d/2}px;width:${w}px;height:${d}px;--fh:${fh}px">`+
+    `<i class="bsh" style="left:-3px;top:-3px;width:${w+6}px;height:${d+6}px"></i>`+
+    f("wv",`left:0;top:0;width:${w}px;height:${H}px;transform-origin:0 0;transform:rotateX(90deg)`)+
+    f("wv dk",`left:0;top:${d}px;width:${w}px;height:${H}px;transform-origin:0 0;transform:rotateX(90deg)`)+
+    f("wh dk",`left:0;top:0;width:${H}px;height:${d}px;transform-origin:0 0;transform:rotateY(-90deg)`)+
+    f("wh",`left:${w}px;top:0;width:${H}px;height:${d}px;transform-origin:0 0;transform:rotateY(-90deg)`);
+  if(condo){
+    s+=f("rf flat",`left:0;top:0;width:${w}px;height:${d}px;transform:translateZ(${H}px)`)+
+      f("ant",`left:${w/2-1}px;top:${d/2}px;width:2px;height:11px;transform-origin:0 0;transform:translateZ(${H}px) rotateX(90deg)`)+
+      f("ant",`left:${w/2}px;top:${d/2-1}px;width:11px;height:2px;transform-origin:0 0;transform:translateZ(${H}px) rotateY(-90deg)`)+
+      f("lamp",`left:${w/2-2}px;top:${d/2-2}px;width:4px;height:4px;transform:translateZ(${H+11}px)`);
+  }else{
+    const rh=8,half=d/2,sl=Math.hypot(half,rh),ang=(Math.atan2(rh,half)*180/Math.PI).toFixed(2);
+    s+=f("rf",`left:-2px;top:-1px;width:${w+4}px;height:${sl+1}px;transform-origin:50% 0;transform:translateZ(${H}px) rotateX(${ang}deg)`)+
+      f("rf dk",`left:-2px;top:${d-sl}px;width:${w+4}px;height:${sl+1}px;transform-origin:50% 100%;transform:translateZ(${H}px) rotateX(${-ang}deg)`)+
+      f("gb",`left:0;top:0;width:${rh}px;height:${d}px;transform-origin:0 0;transform:translateZ(${H}px) rotateY(-90deg)`)+
+      f("gb",`left:${w}px;top:0;width:${rh}px;height:${d}px;transform-origin:0 0;transform:translateZ(${H}px) rotateY(-90deg)`);
+  }
+  return s+"</div>";
+}
 function cubeHTML(x,y,w,d,h,top,side,front){
   const f=(st)=>`<i style="${st}"></i>`;
   return `<div class="cube" style="left:${x-w/2}px;top:${y-d/2}px;width:${w}px;height:${d}px">`+
@@ -1755,16 +1776,15 @@ function drawBoard3d(){
     const oc=own?colorOf(own.cor).c:"";
     const hl=b3hl(),dim=hl&&(hl==="free"?!!t.dono:t.dono!==hl);
     let extra="";
+    let floor="";
     if(own){
-      const L2=Math.max(w,ht);
-      const hx=p.inx*L2*.18,hy=p.iny*L2*.18,px=-p.inx*L2*.16,py=-p.iny*L2*.16;
-      let houses="";
-      if(t.casas>=5)houses=cubeHTML(hx,hy,22,22,26,"#FF9B70","#C5512A","#E0582F");
-      else for(let k=0;k<t.casas;k++){const off=(k-(t.casas-1)/2)*12;houses+=cubeHTML(hx+(p.inx?0:off),hy+(p.iny?0:off),10,10,10,"#8BE596","#2E8B44","#3FAA55")}
+      const L2=Math.max(w,ht),S2=Math.min(w,ht),bx=-p.inx*L2*.25+p.iny*S2*.2,by=-p.iny*L2*.25-p.inx*S2*.2;
+      const bld=t.casas>=5?buildingHTML(bx,by,6,true):t.casas>0?buildingHTML(bx,by,t.casas,false):"";
       const sparks=t.hipotecada?"":`<b style="--d:${-((c.id*37)%28)/10}s"></b><b style="--d:${-((c.id*53)%28)/10}s"></b><b style="--d:${-((c.id*71)%28)/10}s"></b>`;
-      extra=`<div class="b3aura"><i class="n"></i><i class="s"></i><i class="w"></i><i class="e"></i>${sparks}</div><div class="b3houses" style="transform:translateZ(1px)">${houses}</div><div class="b3pin" style="transform:translate(${px}px,${py}px) translateZ(2px)"><div class="b3stand" style="--oc:${oc}">${PAWN}</div></div>`;
+      floor=`<span class="b3own">${avatar(own)}</span>`;
+      extra=`<div class="b3aura"><i class="n"></i><i class="s"></i><i class="w"></i><i class="e"></i>${sparks}</div><div class="b3houses" style="transform:translateZ(1px)">${bld}</div>`;
     }
-    h+=`<div class="b3t r${p.rot}${c.acao?" acao":" prop"}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}" data-b3="${c.id}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}${c.acao?"":`;--sky:${skyline(c.id)}`}"><div class="b3in"><span class="b3nm">${esc(c.nome)}${c.acao?"":`<small>${esc(c.pais)}</small>`}</span><span class="b3pr">$${c.preco.toLocaleString("pt-BR")}</span></div>${extra}</div>`;
+    h+=`<div class="b3t r${p.rot}${c.acao?" acao":" prop"}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}" data-b3="${c.id}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}${c.acao?"":`;--sky:${skyline(c.id)}`}"><div class="b3in">${floor}<span class="b3nm">${esc(c.nome)}${c.acao?"":`<small>${esc(c.pais)}</small>`}</span><span class="b3pr">$${c.preco.toLocaleString("pt-BR")}</span></div>${extra}</div>`;
   });
   h+=`<div class="b3center"><span class="b3sr a">SORTE<i>ou</i>REVÉS</span><span class="b3sr b">SORTE<i>ou</i>REVÉS</span><div class="b3logo"><img src="logo.webp" alt=""><b>MUNDO</b></div></div>`;
   $("#b3dBoard").innerHTML=h;
@@ -1781,8 +1801,6 @@ function b3cam(){
   const z=b3.fit*Math.pow(1.25,b3.zoom);
   $("#b3dCam").style.transform=`translateY(${-b3.pitch*0.5}px) scale(${z})`;
   $("#b3dBoard").style.transform=`rotateX(${b3.pitch}deg) rotateZ(${b3.yaw}deg)`;
-  const bill=`rotateZ(${-b3.yaw}deg) rotateX(${-b3.pitch}deg)`;
-  document.querySelectorAll("#b3dBoard .b3stand").forEach(el=>el.style.transform=bill);
 }
 function openBoard3d(){
   b3.hl=cdFilter==="all"?null:cdFilter==="mine"?L.me:cdFilter;
