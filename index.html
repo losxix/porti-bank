@@ -942,6 +942,9 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3t.own.r1 .b3in{transform:translateZ(3px) rotate(90deg)}
 .b3t.own.r2 .b3in{transform:translateZ(3px) rotate(180deg)}
 .b3t.own.r3 .b3in{transform:translateZ(3px) rotate(-90deg)}
+/* the place name floats a little above the owner's photo */
+.b3t.own .b3in{overflow:visible;transform-style:preserve-3d}
+.b3t.own .b3nm{transform:translateZ(7px);text-shadow:0 1px 2px #000,0 0 5px #000c}
 .b3t.own::before{transform:translateZ(.5px)}
 .b3aura::before{transform:translateZ(1px)}
 @media (prefers-reduced-motion:reduce){.b3aura::before,.b3aura i{animation:none;opacity:.75}.b3aura b{display:none}}
