@@ -1012,10 +1012,10 @@ function drawSheet(){
   document.querySelectorAll("#shTabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind)));
   $("#shToWrap").hidden=SH.kind!=="pay"||SH.nfc;
   $("#calcToggle").hidden=SH.kind!=="pay";if(SH.kind!=="pay")closeCalc();
-  $("#shReasonBtn").hidden=!REASONS[SH.kind].length;
+  $("#shReasonBtn").hidden=!REASONS[SH.kind].length||SH.nfc;
   $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":SH.kind==="recv"?"Quanto vem do banco":"Valor";
   $("#shMore").hidden=!shMore;$("#shMoreBtn").setAttribute("aria-expanded",String(shMore));
-  $("#shReasonWrap").hidden=!(shWhy||SH.note)||!REASONS[SH.kind].length;
+  $("#shReasonWrap").hidden=!(shWhy||SH.note||SH.nfc)||!REASONS[SH.kind].length;
   $("#shReasonBtn").setAttribute("aria-expanded",String(!$("#shReasonWrap").hidden));
   $("#shReasonBtn").innerHTML=SH.note?`<span class="rtag"${rStyle(SH.note)}>${rIcon(SH.note)}${esc(SH.note)}</span>`:"Adicionar motivo";
   $("#shHint").hidden=SH.kind!=="set"&&!(SH.kind==="recv"&&!boss);
