@@ -680,15 +680,10 @@ let tripT;
 function tripShow(id,leaving){
   const now=Date.now(),k=id+(leaving?"v":"b");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
   const p=derive().P[id];if(!p)return;
-  if(window.PortiFerias){
-    const opt={nome:p.nome,foto:p.foto&&/^data:image\//.test(p.foto)?p.foto:"",cor:colorOf(p.cor).c};
-    play(leaving?"vacay3d":"back3d");
-    (leaving?PortiFerias.sair(opt):PortiFerias.voltar(opt)).then(r=>{if(r&&r.reason!=="concluida")stopSfx()});
-    return;
-  }
   const el=$("#trip");
   $("#tripWho").innerHTML=avatar(p,"big");
   $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias!`:`<b>${esc(p.nome)}</b> voltou das férias!`;
+  $("#tripSignTop").textContent=leaving?"DESTINO":"ATÉ A PRÓXIMA";
   el.className="trip "+(leaving?"leaving":"back");
   el.hidden=true;void el.offsetWidth;el.hidden=false;
   el.querySelectorAll("*").forEach(n=>{n.style.animation="none";void n.offsetWidth;n.style.animation=""});

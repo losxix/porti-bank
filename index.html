@@ -529,8 +529,26 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .txsum{margin:0 0 10px;font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
 .txsum b{color:var(--ink)}.txsum .inc{color:#1d8a4a;font-weight:700}.txsum .outc{color:var(--neg);font-weight:700}
 .txsum .link{margin-left:auto;font-size:12.5px}
+
+/* vacation 3D, same frame as the jail cell */
+.trip .trip-stage{width:min(78vw,320px);aspect-ratio:1/1.1;background:#e9c681;border-radius:22px;border:3px solid #000;box-shadow:0 0 0 3px #2b2d33,0 18px 40px #000a}
+.trip .world{position:absolute;top:0;bottom:0;right:0;width:165%;animation:sceneDrift 3.1s ease-in-out forwards;transform-origin:70% 50%}
+.trip .scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.trip .sign{position:absolute;left:66.1%;top:15.7%;width:30.1%;height:17%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transform:rotate(-1.7deg);color:#fff8dc;text-align:center;line-height:1;text-shadow:0 1px 2px #00392e9c}
+.trip .sign span{font-size:7px;font-weight:800;letter-spacing:1.4px;color:#ffda69}
+.trip .sign strong{font-family:var(--display);font-size:13px;font-weight:800;letter-spacing:-.3px}
+@keyframes sceneDrift{from{transform:scale(1.02)}to{transform:scale(1.07) translateX(1.5%)}}
+.trip .car{left:3%;right:auto;width:94%;margin:0;bottom:-1%}
+.trip .carimg{display:block;width:100%;height:auto;filter:drop-shadow(0 8px 6px #0005)}
+.trip.back .carimg{transform:scaleX(-1)}
+.trip .driver{position:absolute;left:50%;top:4%;z-index:2;transform:translateX(-50%)}
+.trip .driver .avatar.big{width:56px!important;height:56px!important;min-width:56px!important;min-height:56px!important;max-width:56px!important;max-height:56px!important;flex:0 0 56px!important;font-size:24px!important;border:4px solid #FFD12B!important;box-shadow:0 5px 0 #000!important}
+.trip.back .driver{left:50%}
+.trip-txt{background:#FFD12B;color:#252329}
+.trip.leaving .trip-txt{animation:stamp .4s cubic-bezier(.2,1.8,.4,1) .9s both}
+.trip.back .trip-txt{background:#7ee08a}
+.trip .speed i{background:#fff}
 </style>
-<link rel="stylesheet" href="porti-ferias.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -714,17 +732,8 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 </div>
 <div class="trip" id="trip" hidden aria-live="polite">
   <div class="trip-stage">
-    <div class="sun"></div><div class="cloud c1"></div><div class="cloud c2"></div>
-    <div class="sea"></div><svg class="palm"><use href="#pb-palm"/></svg><div class="road"><i></i></div>
-    <div class="car"><div class="driver" id="tripWho"></div><svg class="carsvg" viewBox="0 0 240 120" aria-hidden="true">
- <rect x="150" y="18" width="42" height="26" rx="5" fill="#e0662b" stroke="#252329" stroke-width="3"/><rect x="165" y="12" width="12" height="8" rx="3" fill="none" stroke="#252329" stroke-width="3"/><path d="M150 31h42" stroke="#252329" stroke-width="2"/>
- <path d="M18 78c0-14 10-22 26-24l34-4 22-16h56l26 20 34 6c10 2 14 9 14 18v8H18z" fill="#FFD12B" stroke="#252329" stroke-width="4" stroke-linejoin="round"/>
- <path d="M104 36l-16 14h66l-18-14z" fill="#bfe6f5" stroke="#252329" stroke-width="3" stroke-linejoin="round"/>
- <rect x="18" y="72" width="214" height="10" fill="#f0a91c"/><path d="M18 86h214" stroke="#252329" stroke-width="4"/>
- <circle cx="224" cy="68" r="5" fill="#fff6c8" stroke="#252329" stroke-width="2"/><rect x="16" y="62" width="8" height="8" rx="2" fill="#e04a3c" stroke="#252329" stroke-width="2"/>
- <g class="wheel" style="transform-origin:62px 92px"><circle cx="62" cy="92" r="18" fill="#252329"/><circle cx="62" cy="92" r="8" fill="#d9dce2"/><path d="M62 76v32M46 92h32" stroke="#d9dce2" stroke-width="3"/></g>
- <g class="wheel" style="transform-origin:186px 92px"><circle cx="186" cy="92" r="18" fill="#252329"/><circle cx="186" cy="92" r="8" fill="#d9dce2"/><path d="M186 76v32M170 92h32" stroke="#d9dce2" stroke-width="3"/></g>
-</svg><div class="smoke"><i></i><i></i><i></i></div></div>
+    <div class="world"><img class="scene" src="ferias-cenario.webp" alt="" draggable="false"><div class="sign"><span id="tripSignTop">DESTINO</span><strong>BARREIRINHAS</strong></div></div>
+    <div class="car"><img class="carimg" src="ferias-carro.webp" alt="" draggable="false"><div class="driver" id="tripWho"></div><div class="smoke"><i></i><i></i><i></i></div></div>
     <div class="speed"><i></i><i></i><i></i><i></i></div>
   </div>
   <p class="trip-txt" id="tripTxt"></p>
@@ -744,8 +753,6 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="vendor/qrcode.js"></script>
-<script>window.PORTI_FERIAS_ASSETS={carro:"ferias-carro.webp",cenario:"ferias-cenario.webp",logo:"logo.webp"};</script>
-<script src="porti-ferias.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
