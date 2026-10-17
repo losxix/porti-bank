@@ -1866,7 +1866,7 @@ function skyline(id){
 }
 const CORNER_IC={
   "Início":'<svg viewBox="0 0 48 48"><path d="M36 14 14 36M14 18v18h18"/></svg>',
-  "Cadeia":'<svg viewBox="0 0 48 48"><circle cx="15" cy="30" r="9"/><circle cx="33" cy="30" r="9"/><path d="M15 21v-6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v6"/></svg>',
+  "Cadeia":'<svg viewBox="0 0 48 48"><rect x="7" y="8" width="34" height="32" rx="4"/><path d="M15.5 8v32M24 8v32M32.5 8v32M7 24h34"/></svg>',
   "Férias":'<img src="status-ferias.svg" alt="">',
   "Vá para a cadeia":'<svg viewBox="0 0 48 48"><path d="M8 24h28M28 14l10 10-10 10"/></svg>'
 };
