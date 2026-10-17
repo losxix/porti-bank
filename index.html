@@ -867,6 +867,47 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3dtools button{min-width:44px;height:38px;padding:0 10px;border-radius:12px;border:1.5px solid #000;background:#fff8e8;color:#252329;font:inherit;font-weight:800;font-size:12px;box-shadow:1px 2px 0 #000}
 #cardSheet.over3d{z-index:67}
 #cardSheet.over3d~.scrim,body:has(#cardSheet.over3d:not([hidden])) #scrim{z-index:66}
+
+/* ---------- tabuleiro 3D v2: inspirado no tabuleiro físico ---------- */
+.cdboard{position:relative;height:min(92vw,400px);margin:0 -18px 4px;border-radius:0;overflow:hidden;background:radial-gradient(110% 80% at 50% 45%,#3a3846,#141318 75%)}
+.cdboard .b3dstage{position:absolute;inset:0;touch-action:pan-y;perspective:1200px}
+.b3exp{position:absolute;right:12px;bottom:12px;z-index:3;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;border-radius:12px;border:1.5px solid #000;background:#fff8e8;color:#252329;font:inherit;font-weight:800;font-size:13px;box-shadow:1px 2px 0 #000}
+.b3exp svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.b3dboard{background:#0b0a0e;border:9px solid #08070a;border-radius:10px;box-shadow:0 0 0 2px #2e2c36,0 30px 60px #0009}
+.b3dboard::after{transform:translateZ(-18px);background:#050407;inset:-9px;border-radius:10px}
+.b3t{border:1px solid #050407;background:#e9e9ec;color:#fff}
+.b3t.prop{background:linear-gradient(180deg,var(--gc),color-mix(in oklab,var(--gc) 55%,#000))}
+.b3t.prop .b3in{background:var(--sky) center bottom/100% 62% no-repeat}
+.b3t .b3band{display:none}
+.b3t.prop .b3nm{padding:5px 3px 0;font-size:8.6px;line-height:1.05;text-shadow:0 1px 1px #000a}
+.b3t.prop .b3nm small{display:block;font-size:6.6px;font-weight:700;opacity:.92;margin-top:1px}
+.b3t .b3pr{font-family:var(--body);font-weight:900;font-size:9.4px;letter-spacing:-.5px;white-space:nowrap;color:#fff;text-shadow:0 1px 1px #000;padding-bottom:5px}
+.b3t.acao{background:linear-gradient(180deg,#1d1c23,#0b0a0e)}
+.b3t.acao .b3nm{margin-top:30%;font-size:10.5px;color:#fff}
+.b3t.sp{background:linear-gradient(180deg,#f4f4f6,#d9d9de);color:#4a4a52}
+.b3t.sp .b3nm{margin:auto 0;font-family:var(--display);font-size:9.5px;line-height:1;letter-spacing:-.2px}
+.b3t.sp .b3nm i{display:block;font-style:normal;font-size:6.5px;margin:1px 0}
+.b3t.fmi{background:linear-gradient(180deg,#1d1c23,#0b0a0e);color:#fff}
+.b3t.fmi .b3nm{margin:auto 0;font-size:7.5px;line-height:1.15}
+.b3t.fmi .b3nm b{display:block;font-family:var(--display);font-size:11px;margin-top:3px}
+.b3t.corner{background:linear-gradient(135deg,#FF9A1F,#E9461A);color:#fff}
+.b3t.corner .b3in{justify-content:center;gap:4px}
+.b3t.corner .b3nm{margin:0;font-family:var(--display);font-size:12px;letter-spacing:.5px;text-shadow:0 2px 0 #0005}
+.b3t.corner img,.b3t.corner svg{width:46%;height:auto;filter:drop-shadow(0 2px 0 #0006)}
+.b3t.corner svg{fill:none;stroke:#FFD12B;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.b3center{background:
+  radial-gradient(60% 50% at 50% 42%,#ffb84a33,transparent 70%),
+  repeating-linear-gradient(0deg,transparent 0 38px,#ffffff08 38px 39px),
+  repeating-linear-gradient(90deg,transparent 0 38px,#ffffff08 38px 39px),
+  radial-gradient(circle at 50% 50%,#2b2a33,#0e0d12 72%);position:relative;overflow:hidden}
+.b3center .b3logo{display:flex;flex-direction:column;align-items:center;transform:rotate(-32deg) translateZ(6px)}
+.b3center img{width:170px;transform:none;filter:drop-shadow(0 6px 0 #000)}
+.b3center b{font-size:64px;letter-spacing:8px;color:#c9a35c;background:linear-gradient(#f3d58f,#a7782f);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;transform:none;text-shadow:none;filter:drop-shadow(0 4px 0 #000)}
+.b3sr{position:absolute;width:96px;height:96px;border-radius:50%;background:radial-gradient(circle,#f2f2f4,#c9c9d0);display:grid;place-items:center;text-align:center;color:#55555e;font-family:var(--display);font-size:13px;line-height:1;box-shadow:0 4px 0 #0008}
+.b3sr i{display:block;font-style:normal;font-size:9px;margin:2px 0}
+.b3sr.a{left:9%;top:7%;transform:rotate(135deg)}.b3sr.b{right:9%;bottom:7%;transform:rotate(-40deg)}
+.b3stand .avatar{box-shadow:0 3px 0 #000,0 0 0 2px #000!important}
+#b3d .b3dstage{touch-action:none}
 </style>
 <link rel="stylesheet" href="porti-status.css">
 </head>
@@ -1034,9 +1075,10 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
   <div class="tfoot"><div class="warn" id="shWarn"></div><button class="btn" id="shGo" type="button" disabled>Pagar</button></div>
 </div>
 <div class="sheet tsheet" id="cardsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="cdTitle">
-  <div class="sheet-h tsh"><div class="who"><div style="min-width:0"><b id="cdTitle">Cartas do jogo</b><small id="cdSub"></small></div></div><button class="b3dbtn" id="cd3d" type="button"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9zM3 7.5 12 12l9-4.5M12 12v9"/></svg>Tabuleiro 3D</button><button class="xbtn" id="cdClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+  <div class="sheet-h tsh"><div class="who"><div style="min-width:0"><b id="cdTitle">Cartas do jogo</b><small id="cdSub"></small></div></div><button class="xbtn" id="cdClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
   <div class="cddrop" id="cdDrop" hidden><span class="cdhint">Segure uma carta e arraste até quem comprou</span><div class="cdppl" id="cdPpl"></div></div>
   <div class="tbody" id="cdBody">
+    <div class="cdboard" id="cdBoardHost"><button class="b3exp" id="b3Expand" type="button"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Expandir</button></div>
     <div class="fchips" id="cdFilter"></div>
     <div id="cdGroups"></div>
   </div>
