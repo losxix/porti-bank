@@ -548,6 +548,78 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .trip.leaving .trip-txt{animation:stamp .4s cubic-bezier(.2,1.8,.4,1) .9s both}
 .trip.back .trip-txt{background:#7ee08a}
 .trip .speed i{background:#fff}
+
+/* ---------- transfer sheet (v2): recipient → value → confirm ---------- */
+.sheet.tsheet,.sheet.psheet{border-width:1.5px;box-shadow:0 -8px 30px #0003;gap:0;padding:8px 0 0;overflow:hidden}
+.sheet.tsheet>*,.sheet.psheet>*{max-width:520px}
+.tsh{padding:0 max(18px,env(safe-area-inset-right,0px)) 10px max(18px,env(safe-area-inset-left,0px));min-height:52px}
+.tsh .who .avatar{width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;max-width:38px!important;max-height:38px!important;flex:0 0 38px!important;font-size:16px!important}
+.tsh b{font-size:17px!important}
+.tsh small{font-size:12px!important;margin-top:3px!important}
+.xbtn{flex:none;width:40px;height:40px;border-radius:50%;border:1.5px solid color-mix(in oklab,var(--edge) 35%,transparent);background:var(--surface);color:var(--ink);display:grid;place-items:center;padding:0}
+.xbtn svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round}
+.tbody{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:18px;padding:4px max(18px,env(safe-area-inset-right,0px)) 16px max(18px,env(safe-area-inset-left,0px))}
+.tsheet h2{font-size:10.5px;letter-spacing:1.1px;margin:0 0 9px;color:var(--muted)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--soft)}
+.seg[hidden]{display:none}
+.seg button{min-height:42px;border:0;border-radius:11px;background:transparent;color:var(--ink);font:inherit;font-weight:800;font-size:15px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);box-shadow:0 1px 0 #0002}
+.rcpts{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -18px;padding:2px 18px 4px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.rcpts::-webkit-scrollbar{display:none}
+.rcpts button{flex:none;width:68px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:7px 2px 8px;border:0;border-radius:16px;background:transparent;color:var(--ink);font:inherit;scroll-snap-align:start}
+.rcpts .ring{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;border:3px solid transparent}
+.rcpts .avatar{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;max-width:44px!important;max-height:44px!important;flex:0 0 44px!important;font-size:18px!important;box-shadow:none!important}
+.rcpts .bankav{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#252329;color:#FFD12B}
+.rcpts .bankav svg{width:22px;height:22px}
+.rcpts .nm{font-size:12px;font-weight:700;line-height:1.15;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcpts button[aria-pressed="true"]{background:color-mix(in oklab,var(--accent) 30%,transparent)}
+.rcpts button[aria-pressed="true"] .ring{border-color:var(--accent)}
+.rcpts button[aria-pressed="true"] .nm{font-weight:800}
+.amtrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}
+.amtrow .amount{text-align:center;border-bottom-width:2px;min-height:60px;font-size:clamp(30px,9vw,40px)}
+.step{min-width:66px;min-height:48px;border-radius:14px;border:1.5px solid color-mix(in oklab,var(--edge) 30%,transparent);background:var(--surface);color:var(--ink);font:inherit;font-weight:800;font-size:13px;padding:0 8px}
+.step:active,.quick button:active,.chips button:active{transform:scale(.96)}
+.amtsub{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-top:4px}
+.amtsub span{font-size:12px;color:var(--muted)}
+.mini{border:0;background:none;color:var(--muted);font:inherit;font-size:12.5px;font-weight:700;text-decoration:underline;text-underline-offset:3px;padding:6px 2px;min-height:32px}
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:6px}
+.quick button{min-height:48px;border-radius:13px;border:1.5px solid color-mix(in oklab,var(--edge) 30%,transparent);background:var(--surface);color:var(--ink);font:inherit;font-weight:800;font-size:14px;padding:0 2px;white-space:nowrap}
+.quick.setq{grid-template-columns:1fr 1fr}
+.morebtn,.extra{border:0;background:none;color:var(--ink);font:inherit;font-size:13px;font-weight:700;padding:10px 0;min-height:44px;text-align:left;display:inline-flex;align-items:center;gap:6px}
+.morebtn::after{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s}
+.morebtn[aria-expanded="true"]::after{transform:rotate(-135deg) translate(-1px,-1px)}
+.morebox{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;background:var(--soft)}
+.morebox[hidden]{display:none}
+.morebox h3{margin:2px 0 0;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.tsheet .chips{gap:7px}
+.tsheet .chips button{border:1.5px solid color-mix(in oklab,var(--edge) 28%,transparent);box-shadow:none;border-radius:11px;min-height:42px;font-size:13px;background:var(--surface)}
+.tsheet .chips button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent;box-shadow:none}
+.extras{display:flex;gap:18px;flex-wrap:wrap;border-top:1px solid color-mix(in oklab,var(--edge) 12%,transparent);margin-top:4px}
+.extra{text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:5px}
+.extra[aria-expanded="true"]{text-decoration-color:var(--ink)}
+.tsheet .calc{margin-top:6px;border:0;background:var(--soft);box-shadow:none}
+#shReasonWrap{margin-top:8px}
+.tfoot{flex:none;padding:10px max(18px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));background:var(--bg);border-top:1px solid color-mix(in oklab,var(--edge) 12%,transparent)}
+.tfoot .warn{min-height:0;margin-bottom:6px}.tfoot .warn:empty{display:none}
+.tfoot .btn{min-height:56px;border-width:1.5px;box-shadow:0 2px 0 var(--shadow);font-size:16.5px}
+.tfoot .btn:disabled{background:var(--soft);color:var(--muted);border-color:transparent;box-shadow:none;opacity:1}
+.kbd .tfoot{padding-bottom:10px}
+/* player menu */
+.psheet{padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))!important}
+.plist,#plBoss{padding:0 max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px))}
+.plist{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pact{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;min-height:72px;padding:12px 13px;border-radius:16px;border:1.5px solid color-mix(in oklab,var(--edge) 28%,transparent);background:var(--surface);color:var(--ink);font:inherit}
+.pact b{font-size:15px;font-weight:800;letter-spacing:-.3px}
+.pact span{font-size:11.5px;color:var(--muted);line-height:1.3}
+.pact[data-pa="pay"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.pact[data-pa="pay"] span{color:#5a4d1d}
+.pact[hidden]{display:none}
+#plBoss{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+#plBoss h2{font-size:10.5px;letter-spacing:1.1px;color:var(--muted);margin:0}
+#plBoss .btn{box-shadow:none;border-width:1.5px}
+#plBoss .jailrow .btn{display:flex;align-items:center;justify-content:center;gap:2px}
+#plBoss[hidden]{display:none}
+body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 </style>
 </head>
 <body>
@@ -686,29 +758,43 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
   <button class="bumpbtn" id="bumpList" type="button">Escolher na lista</button>
   <button class="bumpbtn ghost" id="bumpCancel" type="button">Cancelar</button>
 </div></div>
-<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shName">
-  <div class="sheet-h"><div class="who"><span class="pawn" id="shDot" style="width:16px;height:16px"></span><div style="min-width:0"><b id="shName"></b><small id="shBal"></small></div></div><button class="link" id="shClose">Cancelar</button></div>
-  <div class="tabs" id="shTabs">
-    <button data-kind="pay">Pagar</button><button data-kind="recv">Receber</button><button data-kind="salary">Partida</button><button data-kind="set">Ajustar</button>
+<div class="sheet tsheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shName">
+  <div class="sheet-h tsh"><div class="who"><span id="shAv"></span><div style="min-width:0"><b id="shName"></b><small id="shBal"></small></div></div><button class="xbtn" id="shClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+  <div class="tbody" id="shBody">
+    <div class="seg" id="shTabs"><button data-kind="pay" type="button">Pagar</button><button data-kind="recv" type="button">Receber</button></div>
+    <div id="shToWrap"><h2>Para quem</h2><div class="rcpts" id="shTo"></div></div>
+    <div id="shAmtWrap"><h2 id="shAmtLbl">Valor</h2>
+      <div class="amtrow"><button class="step" id="shMinus" type="button" data-add="-1000">−1 mil</button><input class="amount" id="shAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="$ 0"><button class="step" id="shPlus" type="button" data-add="1000">+1 mil</button></div>
+      <div class="amtsub"><span id="shAmtNote"></span><button class="mini" id="shClear" type="button" data-add="0">Limpar</button></div>
+      <div class="quick" id="shQuick"></div>
+      <button class="morebtn" id="shMoreBtn" type="button" aria-expanded="false">Mais valores</button>
+      <div class="morebox" id="shMore" hidden><h3>Somar</h3><div class="chips" id="shMorePlus"></div><h3>Subtrair</h3><div class="chips" id="shMoreMinus"></div></div>
+      <div class="extras"><button class="extra" id="calcToggle" type="button" aria-expanded="false">Calcular aluguel</button><button class="extra" id="shReasonBtn" type="button" aria-expanded="false">Adicionar motivo</button></div>
+      <div class="calc" id="calc" hidden>
+        <h2 style="margin:0">Quanto deu nos dados?</h2>
+        <div class="dice" id="calcDice"></div>
+        <label for="calcVal">Valor para cada ponto<input class="inp num" id="calcVal" inputmode="numeric" placeholder="Ex.: 40.000" autocomplete="off"></label>
+        <div class="chips" id="calcQuick"></div>
+        <div class="calcres"><span id="calcExpr">Escolha os dados e o valor</span><button class="btn small" id="calcUse" type="button" disabled>Usar</button></div>
+      </div>
+      <div id="shReasonWrap" hidden><h2>Motivo</h2><div class="chips" id="shReason"></div></div>
+    </div>
+    <p class="hint" id="shHint" hidden></p>
   </div>
-  <div id="shToWrap"><h2>Para quem</h2><div class="chips" id="shTo"></div></div>
-  <div id="shAmtWrap"><h2 id="shAmtLbl">Valor</h2>
-    <input class="amount" id="shAmount" inputmode="numeric" autocomplete="off" placeholder="$ 0">
-    <div class="chips" id="shQuick" style="margin-top:12px"></div>
-    <button class="calcbtn" id="calcToggle" type="button" aria-expanded="false">Calculadora: dados × valor</button>
-    <div class="calc" id="calc" hidden>
-      <h2 style="margin:0">Quanto deu nos dados?</h2>
-      <div class="dice" id="calcDice"></div>
-      <label for="calcVal">Valor para cada ponto<input class="inp num" id="calcVal" inputmode="numeric" placeholder="Ex.: 40.000" autocomplete="off"></label>
-      <div class="chips" id="calcQuick"></div>
-      <div class="calcres"><span id="calcExpr">Escolha os dados e o valor</span><button class="btn small" id="calcUse" type="button" disabled>Usar</button></div>
-    </div></div>
-  <div id="shReasonWrap"><h2>Motivo (opcional)</h2><div class="chips" id="shReason"></div></div>
-  <p class="hint" id="shHint" hidden></p>
-  <div class="warn" id="shWarn"></div>
-  <button class="btn" id="shGo" disabled>Pagar</button>
-  <div class="jailrow" id="shJail" hidden><button class="btn ghost small" data-sit="preso" type="button">Mandar para a cadeia</button><button class="btn ghost small" data-sit="ferias" type="button">Dar férias</button><button class="btn ghost small" data-sit="" type="button">Soltar</button></div>
-  <button class="btn ghost" id="shRemove" hidden>Remover da mesa</button>
+  <div class="tfoot"><div class="warn" id="shWarn"></div><button class="btn" id="shGo" type="button" disabled>Pagar</button></div>
+</div>
+<div class="sheet psheet" id="plSheet" hidden role="dialog" aria-modal="true" aria-labelledby="plName">
+  <div class="sheet-h tsh"><div class="who"><span id="plAv"></span><div style="min-width:0"><b id="plName"></b><small id="plBal"></small></div></div><button class="xbtn" id="plClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+  <div class="plist" id="plActs">
+    <button class="pact" data-pa="pay" type="button"><b id="plPayLbl">Pagar</b><span>Para alguém ou para o banco</span></button>
+    <button class="pact" data-pa="recv" type="button"><b>Receber do banco</b><span id="plRecvSub">Vende, hipoteca, prêmio</span></button>
+    <button class="pact" data-pa="salary" type="button"><b id="plSalLbl">Passou pela partida</b><span id="plSalSub"></span></button>
+    <button class="pact" data-pa="set" type="button" id="plSet"><b>Ajustar saldo</b><span>Corrigir ou equilibrar quem entrou no meio</span></button>
+  </div>
+  <div id="plBoss"><h2>Situação no jogo</h2>
+    <div class="jailrow" id="shJail"><button class="btn ghost small" data-sit="preso" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-lock"/></svg>Cadeia</button><button class="btn ghost small" data-sit="ferias" type="button"><svg class="sticon" viewBox="0 0 72 48"><use href="#pb-car"/></svg>Férias</button><button class="btn ghost small" data-sit="" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-unlock"/></svg>Soltar</button></div>
+    <button class="btn ghost" id="shRemove" type="button" hidden>Remover da mesa</button>
+  </div>
 </div>
 <div class="sheet" id="invSheet" hidden role="dialog" aria-modal="true" aria-labelledby="invTitle">
   <div class="sheet-h"><b id="invTitle">Chamar a mesa</b><button class="link" id="invClose">Fechar</button></div>

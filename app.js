@@ -476,6 +476,7 @@ function render(){
   if(!meP||meP.removido||forceJoin){renderJoin(D);show("vJoin");return}
   show("vMain");keepAwake();
   if(!$("#sheet").hidden&&D.P[SH.actor])drawSheet();
+  if(!$("#plSheet").hidden&&D.P[SH.actor])drawPlayer();
   const boss=iAmBanker(),bk=banker();
   const bal=balances(D),c=colorOf(meP.cor),card=$("#card");
   card.style.backgroundColor=c.c;
@@ -750,7 +751,7 @@ document.addEventListener("click",e=>{
     const r=lancar(null,id,L.mesa.salario,"Passou pela partida");play("go");
     toast(p.nome+" passou pela partida: + "+money(L.mesa.salario),{label:"Desfazer",run:()=>estornar(r.id)});
   }
-  else if(b.dataset.actor){play("tap");openSheet("pay",b.dataset.actor)}
+  else if(b.dataset.actor){play("tap");openPlayer(b.dataset.actor)}
   else if(b.dataset.bank){
     const to=b.dataset.bank;closeSheets();
     enqueue({t:"banco",para:to,por:L.me,em:nowIso()});play("go");
@@ -845,7 +846,7 @@ let rmT;
 $("#shRemove").onclick=e=>{
   const b=e.currentTarget,a=SH.actor;
   if(!iAmBanker()||a===L.me)return;
-  if(!b.dataset.arm){b.dataset.arm="1";b.textContent="Toque de novo para remover "+nameOf(a);clearTimeout(rmT);rmT=setTimeout(()=>{delete b.dataset.arm;drawSheet()},4000);play("tap");return}
+  if(!b.dataset.arm){b.dataset.arm="1";b.textContent="Toque de novo para remover "+nameOf(a);clearTimeout(rmT);rmT=setTimeout(()=>{delete b.dataset.arm;drawPlayer()},4000);play("tap");return}
   delete b.dataset.arm;clearTimeout(rmT);
   const nm=nameOf(a);closeSheets();
   enqueue({t:"remover",id:a,por:L.me,em:nowIso()});play("undo");toast(nm+" saiu da mesa.");
@@ -933,83 +934,146 @@ function quickValues(){
   if(s>=10000)return[100,500,1000,5000];
   return[10,50,100,500];
 }
-function chipsHTML(){
-  const v=quickValues(),minus=v.slice(0,4);
-  return v.map(x=>`<button data-add="${x}">+${short(x)}</button>`).join("")+minus.map(x=>`<button data-add="-${x}" class="minus">−${short(x)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
+function chipsHTML(){ /* big shortcuts: one row */
+  const v=quickValues();return v.slice(1,5).map(x=>`<button type="button" data-add="${x}">+${short(x)}</button>`).join("");
 }
+function moreHTML(sign){const v=quickValues();return v.map(x=>`<button type="button" data-add="${sign<0?"-":""}${x}">${sign<0?"−":"+"}${short(x)}</button>`).join("")}
 function setAmount(n){$("#shAmount").value=n?"$ "+n.toLocaleString("pt-BR"):""}
 function openSheet(kind,actor){
   if(L.me&&!iAmBanker()){const me=derive().P[L.me];if(me&&me.situacao){toast(me.situacao==="ferias"?"Você está de férias: só o banqueiro mexe na sua conta.":"Você está na cadeia: só o banqueiro mexe na sua conta.");play("err");return}}
+  if(kind==="salary"){closeSheets();doSalary(actor||L.me);return}
   if(kind==="set"&&!iAmBanker())kind="pay";
+  closeSheets();
   SH={kind,actor:actor||L.me,to:kind==="pay"?"bank":null,note:""};
-  setAmount(0);closeCalc();
+  setAmount(0);closeCalc();shMore=false;shWhy=false;
+  const step=quickValues()[0];
+  $("#shMinus").dataset.add=-step;$("#shMinus").textContent="−"+short(step);
+  $("#shPlus").dataset.add=step;$("#shPlus").textContent="+"+short(step);
+  $("#shMorePlus").innerHTML=moreHTML(1);$("#shMoreMinus").innerHTML=moreHTML(-1);
   $("#shQuick").innerHTML=chipsHTML();
-  $("#scrim").hidden=false;$("#sheet").hidden=false;
-  drawSheet();
+  $("#scrim").hidden=false;$("#sheet").hidden=false;$("#shBody").scrollTop=0;
+  drawSheet();kbFit();
 }
-function closeSheets(){$("#scrim").hidden=true;["#sheet","#invSheet","#bankSheet","#valSheet"].forEach(s=>$(s).hidden=true)}
+let shMore=false,shWhy=false;
+function sheetOn(){document.body.classList.toggle("sheeton",!!document.querySelector(".sheet:not([hidden])"))}
+new MutationObserver(sheetOn).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
+function closeSheets(){$("#scrim").hidden=true;["#sheet","#plSheet","#invSheet","#bankSheet","#valSheet"].forEach(s=>$(s).hidden=true);try{document.activeElement&&document.activeElement.blur()}catch(e){}}
+function shortName(n){n=String(n||"").trim();const f=n.split(/\s+/)[0];return f.length>9?f.slice(0,8)+"…":f}
 function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
   const hiddenBal=p.oculto&&proxy&&L.mesa.esconder!==false;
-  const rm=$("#shRemove");rm.hidden=!(boss&&proxy);
-  $("#shJail").hidden=!boss;
-  $("#shJail").querySelectorAll("button").forEach(b=>{const v=b.dataset.sit||null;b.hidden=(v===(p.situacao||null))});
-  if(!rm.dataset.arm)rm.textContent="Remover "+(p.nome||"")+" da mesa";
-  $("#shDot").style.background=colorOf(p.cor).c;
-  $("#shName").textContent=proxy?"Lançando por "+p.nome:"Seu cartão";
+  $("#shAv").innerHTML=avatar(p);
+  $("#shName").textContent=SH.kind==="set"?"Ajustar saldo · "+p.nome:proxy?"Lançando por "+p.nome:"Seu cartão";
   $("#shBal").textContent="Saldo "+(hiddenBal?MASK:fmt(bal));
-  document.querySelectorAll("#shTabs button").forEach(b=>{b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind));if(b.dataset.kind==="set")b.hidden=!boss});
-  $("#shTabs").style.gridTemplateColumns=boss?"repeat(4,1fr)":"repeat(3,1fr)";
+  $("#shTabs").hidden=SH.kind==="set";
+  document.querySelectorAll("#shTabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind)));
   $("#shToWrap").hidden=SH.kind!=="pay";
-  $("#shAmtWrap").hidden=SH.kind==="salary";
   $("#calcToggle").hidden=SH.kind==="set";
-  $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":"Valor";
-  $("#shReasonWrap").hidden=!REASONS[SH.kind].length;
-  $("#shHint").hidden=SH.kind!=="set"&&!((SH.kind==="recv"||SH.kind==="salary")&&!boss);
+  $("#shReasonBtn").hidden=!REASONS[SH.kind].length;
+  $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":SH.kind==="recv"?"Quanto vem do banco":"Valor";
+  $("#shMore").hidden=!shMore;$("#shMoreBtn").setAttribute("aria-expanded",String(shMore));
+  $("#shReasonWrap").hidden=!(shWhy||SH.note)||!REASONS[SH.kind].length;
+  $("#shReasonBtn").setAttribute("aria-expanded",String(!$("#shReasonWrap").hidden));
+  $("#shReasonBtn").textContent=SH.note?"Motivo: "+SH.note:"Adicionar motivo";
+  $("#shHint").hidden=SH.kind!=="set"&&!(SH.kind==="recv"&&!boss);
+  const q=$("#shQuick");
   if(SH.kind==="set"){
     const avg=tableAverage(D,a);
-    $("#shHint").innerHTML=`Para corrigir o saldo, ou equilibrar quem entrou no meio do jogo. O banco lança a diferença no extrato.`;
-    $("#shQuick").innerHTML=[[L.mesa.saldo_inicial,"Início "+short(L.mesa.saldo_inicial)],[avg,"Média da mesa "+short(avg)]].map(([v,l])=>`<button data-setval="${v}">${l}</button>`).join("")+chipsHTML();
+    $("#shHint").textContent="Para corrigir o saldo, ou equilibrar quem entrou no meio do jogo. O banco lança a diferença no extrato.";
+    q.classList.add("setq");
+    q.innerHTML=[[L.mesa.saldo_inicial,"Início "+short(L.mesa.saldo_inicial)],[avg,"Média da mesa "+short(avg)]].map(([v,l])=>`<button type="button" data-setval="${v}">${l}</button>`).join("");
     if($("#shAmount").value==="")setAmount(bal);
   }else{
     $("#shHint").textContent="Dinheiro do banco só cai depois que o banqueiro aprovar.";
-    if($("#shQuick").querySelector("[data-setval]"))$("#shQuick").innerHTML=chipsHTML();
+    if(q.classList.contains("setq")){q.classList.remove("setq");q.innerHTML=chipsHTML()}
   }
   const others=playersArr(D).filter(x=>x.id!==a);
-  $("#shTo").innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}">${x.cor?avatar(x,"sm"):""}${esc(x.id===L.me?x.nome+" (você)":x.nome)}</button>`).join("");
-  $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button data-note="${esc(r)}" aria-pressed="${SH.note===r}">${esc(r)}</button>`).join("");
+  const bankAv='<span class="bankav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg></span>';
+  const rc=$("#shTo"),sl=rc.scrollLeft;
+  rc.innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button type="button" data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}" aria-label="${esc(x.nome)}"><span class="ring">${x.id==="bank"?bankAv:avatar(x)}</span><span class="nm">${esc(x.id==="bank"?"Banco":shortName(x.nome))}</span></button>`).join("");
+  rc.scrollLeft=sl;
+  $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button type="button" data-note="${esc(r)}" aria-pressed="${SH.note===r}">${esc(r)}</button>`).join("");
   const amt=parseAmt($("#shAmount").value),has=$("#shAmount").value!=="";
+  $("#shClear").hidden=!has;
   const go=$("#shGo"),an=p.nome||"?",warn=$("#shWarn");
   go.className="btn";warn.textContent="";
   if(SH.kind==="pay"){
     const toName=SH.to==="bank"?"o Banco":nameOf(SH.to,D);
-    go.textContent=amt&&SH.to?(proxy?`${an} paga ${money(amt)} para ${toName}`:`Pagar ${money(amt)} para ${toName}`):SH.to?"Digite o valor":"Escolha para quem";
+    go.textContent=amt&&SH.to?(proxy?`${an} paga ${money(amt)} para ${toName}`:`Pagar ${money(amt)} para ${toName}`):SH.to?`Digite o valor para ${toName}`:"Escolha para quem";
     go.disabled=!(amt>0&&SH.to);
     if(amt>bal&&!hiddenBal&&!(a===L.me&&peek))warn.textContent=(proxy?"O saldo de "+an+" fica negativo: ":"Seu saldo fica negativo: ")+fmt(bal-amt);
   }else if(SH.kind==="recv"){
     go.textContent=!amt?"Digite o valor":boss?(proxy?`${an} recebe ${money(amt)} do banco`:`Receber ${money(amt)} do banco`):`Pedir ${money(amt)} ao banqueiro`;go.disabled=!(amt>0);
-  }else if(SH.kind==="salary"){
-    go.textContent=boss?(proxy?an+" recebe ":"Receber ")+money(L.mesa.salario)+" da partida":"Pedir "+money(L.mesa.salario)+" da partida";go.disabled=false;go.className="btn gold";
   }else{
     const d=amt-bal;
-    go.textContent=has?`Deixar o saldo em ${money(amt)}`:"Digite o saldo correto";go.disabled=!has||d===0;
+    go.textContent=has?`Deixar o saldo de ${an} em ${money(amt)}`:"Digite o saldo correto";go.disabled=!has||d===0;
     if(has&&d!==0)warn.textContent=(d>0?"O banco paga ":"O banco recebe ")+money(Math.abs(d));
   }
 }
-$("#shTabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;SH.kind=b.dataset.kind;SH.to=SH.kind==="pay"?"bank":null;SH.note="";setAmount(0);closeCalc();play("tap");drawSheet()});
+$("#shMoreBtn").onclick=()=>{shMore=!shMore;play("tap");drawSheet()};
+$("#shReasonBtn").onclick=()=>{shWhy=$("#shReasonWrap").hidden;play("tap");drawSheet()};
+/* passou pela partida for any player (player menu) */
+function doSalary(id){
+  const D=derive(),p=D.P[id];if(!p)return;
+  if(p.situacao==="preso"){toast(p.nome+" está preso e não recebe do banco.");play("err");return}
+  if(!iAmBanker()&&txArr(D).some(t=>t.status==="pendente"&&t.para===id&&t.motivo==="Passou pela partida")){toast(p.nome+" já tem um pedido da partida esperando o banqueiro.");play("err");return}
+  const r=lancar(null,id,L.mesa.salario,"Passou pela partida");
+  if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(L.mesa.salario),{label:"Cancelar",run:()=>estornar(r.id)});return}
+  play("go");if(id===L.me)flashCard();
+  toast(p.nome+" passou pela partida: + "+money(L.mesa.salario),{label:"Desfazer",run:()=>estornar(r.id)});
+}
+/* player action menu: tap a name in the ranking */
+function openPlayer(id){
+  const D=derive();if(!D.P[id])return;
+  closeSheets();SH={kind:"menu",actor:id,to:null,note:""};
+  $("#scrim").hidden=false;$("#plSheet").hidden=false;drawPlayer();kbFit();
+}
+function drawPlayer(){
+  const D=derive(),a=SH.actor,p=D.P[a]||{},boss=iAmBanker(),self=a===L.me,proxy=!self;
+  const hiddenBal=p.oculto&&proxy&&L.mesa.esconder!==false;
+  $("#plAv").innerHTML=avatar(p);
+  $("#plName").textContent=p.nome+(self?" (você)":"");
+  $("#plBal").textContent="Saldo "+(hiddenBal?MASK:fmt(balances(D)[a]||0))+(p.situacao==="preso"?" · na cadeia":p.situacao==="ferias"?" · de férias":"");
+  $("#plPayLbl").textContent=self?"Pagar":"Pagar por "+shortName(p.nome);
+  $("#plSalSub").textContent=(boss?"+ ":"Pedir + ")+short(L.mesa.salario)+(p.situacao==="preso"?" · preso não recebe":"");
+  $("#plRecvSub").textContent=boss?"Venda, hipoteca, prêmio":"Vira pedido para o banqueiro";
+  $("#plSet").hidden=!boss;
+  $("#plBoss").hidden=!boss;
+  $("#shJail").querySelectorAll("button").forEach(b=>{const v=b.dataset.sit||null;b.hidden=(v===(p.situacao||null))});
+  const rm=$("#shRemove");rm.hidden=!(boss&&proxy);
+  if(!rm.dataset.arm)rm.textContent="Remover "+(p.nome||"")+" da mesa";
+}
+$("#plClose").onclick=closeSheets;
+$("#plActs").addEventListener("click",e=>{const b=e.target.closest("[data-pa]");if(!b)return;const a=SH.actor,k=b.dataset.pa;play("tap");
+  if(k==="salary"){closeSheets();doSalary(a);return}
+  openSheet(k,a)});
+/* keep the sheet above the on-screen keyboard (iPhone shrinks only the visual viewport) */
+function kbFit(){
+  const vv=window.visualViewport;
+  document.querySelectorAll(".sheet").forEach(sh=>{
+    if(sh.hidden||!vv){sh.style.bottom="";sh.style.maxHeight="";sh.classList.remove("kbd");return}
+    const kb=Math.max(0,window.innerHeight-(vv.height+vv.offsetTop));
+    sh.style.bottom=kb?kb+"px":"";
+    sh.style.maxHeight=kb?(vv.height-8)+"px":"";
+    sh.classList.toggle("kbd",kb>60);
+  });
+}
+if(window.visualViewport){visualViewport.addEventListener("resize",kbFit);visualViewport.addEventListener("scroll",kbFit)}
+$("#shAmount").addEventListener("focus",()=>setTimeout(()=>{kbFit();$("#shAmount").scrollIntoView({block:"nearest"})},300));
+$("#shTabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b||b.dataset.kind===SH.kind)return;SH.kind=b.dataset.kind;SH.to=SH.kind==="pay"?"bank":null;SH.note="";shWhy=false;setAmount(0);closeCalc();play("tap");drawSheet()});
 $("#shClose").onclick=closeSheets;$("#scrim").onclick=closeSheets;
 $("#shAmount").addEventListener("input",e=>{const raw=e.target.value;setAmount(raw.replace(/\D/g,"")===""?0:parseAmt(raw));if(raw.replace(/\D/g,"")==="")e.target.value="";drawSheet()});
 $("#sheet").addEventListener("click",e=>{
-  const b=e.target.closest("button");if(!b||b.closest("#shTabs")||b.closest("#calc"))return;
+  const b=e.target.closest("button");if(!b||b.closest("#shTabs")||b.closest("#calc")||b.id==="shMoreBtn"||b.id==="shReasonBtn")return;
   if(b.dataset.to){SH.to=b.dataset.to;play("tap");drawSheet()}
-  else if(b.dataset.note){SH.note=SH.note===b.dataset.note?"":b.dataset.note;play("tap");drawSheet()}
+  else if(b.dataset.note){SH.note=SH.note===b.dataset.note?"":b.dataset.note;if(SH.note)shWhy=false;play("tap");drawSheet()}
   else if(b.dataset.setval){setAmount(+b.dataset.setval);play("tap");drawSheet()}
   else if(b.dataset.add!==undefined){const v=+b.dataset.add;setAmount(v?Math.max(0,parseAmt($("#shAmount").value)+v):0);play("tap");drawSheet()}
 });
 
 /* calculator: dice × value per point */
 let calcDice=0;
-function closeCalc(){$("#calc").hidden=true;$("#calcToggle").setAttribute("aria-expanded","false")}
+function closeCalc(){$("#calc").hidden=true;$("#calcToggle").setAttribute("aria-expanded","false");$("#calcToggle").textContent="Calcular aluguel"}
 function drawCalc(){
   $("#calcDice").innerHTML=Array.from({length:11},(_,i)=>i+2).map(n=>`<button type="button" data-dice="${n}" aria-pressed="${calcDice===n}">${n}</button>`).join("");
   const big=L.mesa.saldo_inicial>=1e6||L.mesa.salario>=1e5;
@@ -1021,7 +1085,7 @@ function drawCalc(){
 }
 $("#calcToggle").onclick=()=>{
   const open=$("#calc").hidden;
-  $("#calc").hidden=!open;$("#calcToggle").setAttribute("aria-expanded",String(open));
+  $("#calc").hidden=!open;$("#calcToggle").setAttribute("aria-expanded",String(open));$("#calcToggle").textContent=open?"Fechar calculadora":"Calcular aluguel";
   if(open)drawCalc();play("tap");
 };
 $("#calc").addEventListener("click",e=>{
@@ -1034,7 +1098,7 @@ $("#calcVal").addEventListener("input",e=>{fmtInput(e.target);drawCalc()});
 
 $("#shGo").onclick=()=>{
   const D=derive(),a=SH.actor,an=nameOf(a,D),proxy=a!==L.me,amt=parseAmt($("#shAmount").value);
-  if((SH.kind==="recv"||SH.kind==="salary")&&(D.P[a]||{}).situacao==="preso"){toast(an+" está preso e não recebe do banco.");play("err");return}
+  if(SH.kind==="recv"&&(D.P[a]||{}).situacao==="preso"){toast(an+" está preso e não recebe do banco.");play("err");return}
   const before=balances(D)[a];
   let r,msg,snd;
   if(SH.kind==="pay"){
@@ -1044,15 +1108,13 @@ $("#shGo").onclick=()=>{
   }else if(SH.kind==="recv"){
     if(!(amt>0))return;
     r=lancar(null,a,amt,SH.note);msg=(proxy?an+" recebeu ":"Recebido: ")+money(amt);snd="recv";
-  }else if(SH.kind==="salary"){
-    r=lancar(null,a,L.mesa.salario,"Passou pela partida");msg=an+" passou pela partida: + "+money(L.mesa.salario);snd="go";
-  }else{
+  }else if(SH.kind==="set"){
     const d=amt-before;if(!d)return;
     r=d>0?lancar(null,a,d,"Ajuste de saldo"):lancar(a,null,-d,"Ajuste de saldo");
     msg="Saldo de "+an+" ajustado para "+money(amt);snd="recv";
-  }
+  }else return;
   closeSheets();
-  if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(SH.kind==="salary"?L.mesa.salario:amt),{label:"Cancelar",run:()=>estornar(r.id)});return}
+  if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(amt),{label:"Cancelar",run:()=>estornar(r.id)});return}
   const after=balances(derive())[a];
   if(SH.kind==="pay"&&SH.to==="bank"){bancoComeu(an,amt);toast(msg,{label:"Desfazer",run:()=>estornar(r.id)});return}
   if(before>=0&&after<0){play("broke");toast(an+" ficou no vermelho!",{label:"Desfazer",run:()=>estornar(r.id)})}
