@@ -498,6 +498,11 @@ create table if not exists public.pb_titulos (
 );
 -- Jogador pediu para comprar; o banqueiro autoriza (ou recusa).
 alter table public.pb_titulos add column if not exists pedido uuid references public.pb_jogadores(id);
+-- Dono ofereceu a carta para outro jogador por um preço; a pessoa confirma.
+alter table public.pb_titulos add column if not exists venda_para uuid references public.pb_jogadores(id);
+alter table public.pb_titulos add column if not exists venda_preco integer;
+-- Partida encerrada pelo banqueiro (mostra o resultado final em todos os celulares).
+alter table public.pb_mesas add column if not exists encerrada boolean not null default false;
 alter table public.pb_cartas  enable row level security;
 alter table public.pb_titulos enable row level security;
 revoke insert, update, delete, truncate on public.pb_cartas, public.pb_titulos from anon, authenticated;
@@ -509,7 +514,8 @@ create policy "pb leitura" on public.pb_titulos for select using (true);
 
 -- Tudo que mexe numa carta passa por aqui. Quando envolve dinheiro, o
 -- lançamento é gravado junto (mesmo id = reenvio nunca duplica).
-create or replace function public.pb_titulo(p_id uuid, p_mesa text, p_carta integer, p_acao text, p_por uuid, p_para uuid)
+drop function if exists public.pb_titulo(uuid, text, integer, text, uuid, uuid);
+create or replace function public.pb_titulo(p_id uuid, p_mesa text, p_carta integer, p_acao text, p_por uuid, p_para uuid, p_valor integer default null)
 returns void
 language plpgsql security definer
 set search_path = public
@@ -547,20 +553,39 @@ begin
     update pb_titulos set pedido = p_por, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
 
   elsif p_acao = 'recusar' then
-    if not (v_boss or t.oferta = p_por or t.pedido = p_por) then raise exception 'Sem permissão.'; end if;
+    if not (v_boss or t.oferta = p_por or t.pedido = p_por or t.venda_para = p_por or t.dono = p_por) then raise exception 'Sem permissão.'; end if;
     if v_boss then
-      update pb_titulos set oferta = null, pedido = null, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+      update pb_titulos set oferta = null, pedido = null, venda_para = null, venda_preco = null, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
     else
       update pb_titulos set oferta = case when oferta = p_por then null else oferta end,
                             pedido = case when pedido = p_por then null else pedido end,
+                            venda_para = case when venda_para = p_por or dono = p_por then null else venda_para end,
+                            venda_preco = case when venda_para = p_por or dono = p_por then null else venda_preco end,
                             atualizado_em = now() where mesa = p_mesa and carta = p_carta;
     end if;
+
+  elsif p_acao = 'vender' then
+    if t.dono is null then raise exception '% não tem dono.', c.nome; end if;
+    if not (v_boss or t.dono = p_por) then raise exception 'Só o dono vende esta carta.'; end if;
+    if p_para is null or p_para = t.dono or not exists (select 1 from pb_jogadores where id = p_para and mesa = p_mesa and not removido) then raise exception 'Escolha quem vai comprar.'; end if;
+    if p_valor is null or p_valor < 0 or p_valor > 1000000000 then raise exception 'Preço inválido.'; end if;
+    update pb_titulos set venda_para = p_para, venda_preco = p_valor, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+
+  elsif p_acao = 'aceitar_venda' then
+    if t.dono = p_por and t.venda_para is null then return; end if; -- já comprou (reenvio)
+    if t.venda_para is null or t.venda_para <> p_por then raise exception 'Essa venda não é para você.'; end if;
+    if p_valor is not null and p_valor <> t.venda_preco then raise exception 'O preço mudou. Confira de novo.'; end if;
+    if t.venda_preco > 0 then
+      insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
+      values (p_id, p_mesa, p_por, t.dono, t.venda_preco, left('Compra: ' || c.nome, 40), p_por, now(), 'aprovado');
+    end if;
+    update pb_titulos set dono = p_por, oferta = null, pedido = null, venda_para = null, venda_preco = null, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
 
   elsif p_acao = 'comprar' then
     v_dono := coalesce(p_para, p_por);
     if t.dono is not null then raise exception '% já tem dono.', c.nome; end if;
     if not (v_boss or (t.oferta = p_por and v_dono = p_por)) then raise exception 'Essa carta não foi oferecida para você.'; end if;
-    update pb_titulos set dono = v_dono, oferta = null, pedido = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    update pb_titulos set dono = v_dono, oferta = null, pedido = null, venda_para = null, venda_preco = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
     insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
     values (p_id, p_mesa, v_dono, null, c.preco, left('Compra: ' || c.nome, 40), p_por, now(), 'aprovado');
 
@@ -571,6 +596,10 @@ begin
       if c.casa = 0 then raise exception 'Ações não têm casas.'; end if;
       if t.hipotecada then raise exception '% está hipotecada.', c.nome; end if;
       if t.casas >= 5 then raise exception '% já tem condomínio.', c.nome; end if;
+      if exists (select 1 from pb_cartas c2 where c2.grupo = c.grupo and not exists (
+                   select 1 from pb_titulos t2 where t2.mesa = p_mesa and t2.carta = c2.id and t2.dono = t.dono and not t2.hipotecada)) then
+        raise exception 'Para construir, é preciso ter todas as cartas da cor, sem hipoteca.';
+      end if;
       update pb_titulos set casas = casas + 1, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
       insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
       values (p_id, p_mesa, t.dono, null, c.casa, left(case when t.casas = 4 then 'Condomínio: ' else 'Construção: ' end || c.nome, 40), p_por, now(), 'aprovado');
@@ -592,15 +621,31 @@ begin
 
   elsif p_acao = 'devolver' then
     if not v_boss then raise exception 'Só o banqueiro.'; end if;
-    update pb_titulos set dono = null, oferta = null, pedido = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    update pb_titulos set dono = null, oferta = null, pedido = null, venda_para = null, venda_preco = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
 
   else
     raise exception 'Ação inválida.';
   end if;
 end;
 $$;
-revoke all on function public.pb_titulo(uuid, text, integer, text, uuid, uuid) from public;
-grant execute on function public.pb_titulo(uuid, text, integer, text, uuid, uuid) to anon, authenticated;
+revoke all on function public.pb_titulo(uuid, text, integer, text, uuid, uuid, integer) from public;
+grant execute on function public.pb_titulo(uuid, text, integer, text, uuid, uuid, integer) to anon, authenticated;
+
+-- O banqueiro encerra (ou reabre) a partida: todos veem o resultado final.
+create or replace function public.pb_mesa_encerrar(p_mesa text, p_por uuid, p_encerrada boolean)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = p_mesa) then
+    raise exception 'Só o banqueiro pode encerrar a partida.';
+  end if;
+  update pb_mesas set encerrada = coalesce(p_encerrada, true), atualizado_em = now() where codigo = p_mesa;
+end;
+$$;
+revoke all on function public.pb_mesa_encerrar(text, uuid, boolean) from public;
+grant execute on function public.pb_mesa_encerrar(text, uuid, boolean) to anon, authenticated;
 
 do $$
 begin

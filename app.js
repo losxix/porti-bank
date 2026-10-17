@@ -71,10 +71,11 @@ function makeApi(){
         .subscribe(s=>onStatus(s));
       return()=>{try{sb.removeChannel(ch)}catch(e){}};
     },
-    bumps(code,onBump){
+    bumps(code,onBump,onPos){
       const ch=sb.channel("toque-"+code,{config:{broadcast:{self:false,ack:false}}})
-        .on("broadcast",{event:"bump"},m=>m&&m.payload&&onBump(m.payload)).subscribe();
-      return{send(p){try{ch.send({type:"broadcast",event:"bump",payload:p})}catch(e){}},close(){try{sb.removeChannel(ch)}catch(e){}}};
+        .on("broadcast",{event:"bump"},m=>m&&m.payload&&onBump(m.payload))
+        .on("broadcast",{event:"pos"},m=>m&&m.payload&&onPos&&onPos(m.payload)).subscribe();
+      return{send(p){try{ch.send({type:"broadcast",event:"bump",payload:p})}catch(e){}},sendPos(p){try{ch.send({type:"broadcast",event:"pos",payload:p})}catch(e){}},close(){try{sb.removeChannel(ch)}catch(e){}}};
     }
   };
 }
@@ -329,7 +330,7 @@ const CARDS={};
  [27,"IPCC","Painel do Clima",150000,40000,75000],[28,"OMS","Org. Mundial da Saúde",150000,40000,75000]
 ].forEach(([id,nome,pais,preco,mult,hip])=>{CARDS[id]={id,nome,pais,preco,mult,casa:0,hip,acao:true}});
 GRUPOS.forEach(g=>g.ids.forEach(id=>{CARDS[id].g=g.k;CARDS[id].cor=g.c}));
-const blankTit=c=>({carta:c,dono:null,casas:0,hipotecada:false,oferta:null,pedido:null});
+const blankTit=c=>({carta:c,dono:null,casas:0,hipotecada:false,oferta:null,pedido:null,venda_para:null,venda_preco:null});
 /* the same rules the server applies, so the phone shows the result right away */
 function applyTit(Tit,T,op,boss){
   const c=CARDS[op.carta];if(!c)return;
@@ -338,17 +339,26 @@ function applyTit(Tit,T,op,boss){
   const bossOp=!!op.por&&op.por===banker();
   if(op.acao==="ofertar"){if(!t.dono)t.oferta=op.para}
   else if(op.acao==="pedir"){if(!t.dono&&(!t.pedido||t.pedido===op.por))t.pedido=op.por}
-  else if(op.acao==="recusar"){if(bossOp){t.oferta=null;t.pedido=null}else{if(t.oferta===op.por)t.oferta=null;if(t.pedido===op.por)t.pedido=null}}
-  else if(op.acao==="comprar"){if(t.dono)return;const d=op.para||op.por;t.dono=d;t.oferta=null;t.pedido=null;t.casas=0;t.hipotecada=false;money(d,null,c.preco,("Compra: "+c.nome).slice(0,40))}
-  else if(op.acao==="construir"){if(!t.dono||c.acao||t.hipotecada||t.casas>=5)return;money(t.dono,null,c.casa,((t.casas===4?"Condomínio: ":"Construção: ")+c.nome).slice(0,40));t.casas++}
+  else if(op.acao==="recusar"){if(bossOp){t.oferta=null;t.pedido=null;t.venda_para=null;t.venda_preco=null}else{if(t.oferta===op.por)t.oferta=null;if(t.pedido===op.por)t.pedido=null;if(t.venda_para===op.por||t.dono===op.por){t.venda_para=null;t.venda_preco=null}}}
+  else if(op.acao==="vender"){if(t.dono&&op.para&&op.para!==t.dono){t.venda_para=op.para;t.venda_preco=op.valor||0}}
+  else if(op.acao==="aceitar_venda"){if(t.venda_para!==op.por)return;if(t.venda_preco>0)money(op.por,t.dono,t.venda_preco,("Compra: "+c.nome).slice(0,40));t.dono=op.por;t.oferta=null;t.pedido=null;t.venda_para=null;t.venda_preco=null}
+  else if(op.acao==="comprar"){if(t.dono)return;const d=op.para||op.por;t.dono=d;t.oferta=null;t.pedido=null;t.venda_para=null;t.venda_preco=null;t.casas=0;t.hipotecada=false;money(d,null,c.preco,("Compra: "+c.nome).slice(0,40))}
+  else if(op.acao==="construir"){if(!t.dono||c.acao||t.hipotecada||t.casas>=5||!groupGap(Tit,c,t.dono).ok)return;money(t.dono,null,c.casa,((t.casas===4?"Condomínio: ":"Construção: ")+c.nome).slice(0,40));t.casas++}
   else if(op.acao==="hipotecar"){if(!t.dono||t.hipotecada)return;t.hipotecada=true;money(null,t.dono,c.hip,("Hipoteca: "+c.nome).slice(0,40))}
   else if(op.acao==="resgatar"){if(!t.dono||!t.hipotecada)return;t.hipotecada=false;money(t.dono,null,c.hip,("Fim da hipoteca: "+c.nome).slice(0,40))}
   else if(op.acao==="tirar_casa")t.casas=Math.max(0,t.casas-1);
-  else if(op.acao==="devolver"){t.dono=null;t.oferta=null;t.pedido=null;t.casas=0;t.hipotecada=false}
+  else if(op.acao==="devolver"){t.dono=null;t.oferta=null;t.pedido=null;t.venda_para=null;t.venda_preco=null;t.casas=0;t.hipotecada=false}
 }
-function titOp(carta,acao,para){
+/* to build, the owner needs every card of the color, none mortgaged */
+function groupGap(Tit,c,owner){
+  const g=GRUPOS.find(x=>x.k===c.g);if(!g||c.acao)return{ok:false,missing:[],hip:[]};
+  const missing=g.ids.filter(id=>!(Tit[id]&&Tit[id].dono===owner)),hip=g.ids.filter(id=>Tit[id]&&Tit[id].dono===owner&&Tit[id].hipotecada);
+  return{ok:!missing.length&&!hip.length,missing,hip};
+}
+function titOp(carta,acao,para,valor){
   if(!L||!L.me)return;
-  enqueue({t:"titulo",id:uuid(),carta,acao,para:para||null,por:L.me,em:nowIso()});
+  const op={t:"titulo",id:uuid(),carta,acao,para:para||null,por:L.me,em:nowIso()};if(valor!=null)op.valor=valor;
+  enqueue(op);
 }
 function rentOf(c,t,dice){
   if(!t||!t.dono||t.hipotecada)return 0;
@@ -374,6 +384,7 @@ function confirmOp(op){
   else if(op.t==="situacao"&&L.jog[op.id]){L.jog[op.id].situacao=op.situacao||null}
   else if(op.t==="esconder"&&L.mesa){L.mesa.esconder=op.permitido}
   else if(op.t==="valores"&&L.mesa){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
+  else if(op.t==="encerrar"&&L.mesa){L.mesa.encerrada=op.encerrada}
 }
 function sendOp(op){
   if(op.t==="entrar")return API.rpc("pb_entrar",{p_id:op.id,p_mesa:L.codigo,p_nome:op.nome,p_cor:op.cor});
@@ -387,7 +398,8 @@ function sendOp(op){
   if(op.t==="foto")return API.rpc("pb_foto",{p_id:op.id,p_foto:op.foto});
   if(op.t==="remover")return API.rpc("pb_remover_jogador",{p_id:op.id,p_por:op.por});
   if(op.t==="esconder")return API.rpc("pb_mesa_esconder",{p_mesa:L.codigo,p_por:op.por,p_permitido:op.permitido});
-  if(op.t==="titulo")return API.rpc("pb_titulo",{p_id:op.id,p_mesa:L.codigo,p_carta:op.carta,p_acao:op.acao,p_por:op.por,p_para:op.para||null});
+  if(op.t==="titulo"){const a={p_id:op.id,p_mesa:L.codigo,p_carta:op.carta,p_acao:op.acao,p_por:op.por,p_para:op.para||null};if(op.valor!=null)a.p_valor=op.valor;return API.rpc("pb_titulo",a)}
+  if(op.t==="encerrar")return API.rpc("pb_mesa_encerrar",{p_mesa:L.codigo,p_por:op.por,p_encerrada:op.encerrada});
   if(op.t==="valores")return API.rpc("pb_mesa_valores",{p_mesa:L.codigo,p_por:op.por,p_saldo_inicial:op.saldo,p_salario:op.salario});
   return Promise.resolve();
 }
@@ -397,7 +409,7 @@ async function flush(cur){
     const op=cur.out[0];
     try{await sendOp(op)}
     catch(e){
-      if(op.t==="titulo"&&op.acao==="pedir"&&/inv[aá]lida/i.test(e.message||"")&&L===cur){cur.out.shift();save();toast("Para pedir cartas, o banqueiro precisa rodar o SQL novo no Supabase.");play("err");continue}
+      if((op.t==="encerrar"||(op.t==="titulo"&&(op.acao==="pedir"||op.acao==="vender"||op.acao==="aceitar_venda"||op.valor!=null)))&&/inv[aá]lida|p_valor|function|does not exist/i.test(e.message||"")&&L===cur){cur.out.shift();save();toast("Falta o banqueiro rodar o SQL novo no Supabase para isso funcionar.");play("err");continue}
       if(e.config&&op.t==="titulo"&&L===cur){cur.out.shift();save();toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");play("err");continue}
       if(e.network||e.config)throw e;
       if(L!==cur)return sent;
@@ -413,7 +425,8 @@ async function flush(cur){
 function mergeMesa(m){
   if(!m||m.codigo!==L.codigo)return;
   const was=L.mesa&&L.mesa.banqueiro;
-  L.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null,esconder:m.esconder_permitido!==false};
+  L.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null,esconder:m.esconder_permitido!==false,encerrada:!!m.encerrada};
+  for(const op of L.out)if(op.t==="encerrar")L.mesa.encerrada=op.encerrada;
   for(const op of L.out)if(op.t==="esconder")L.mesa.esconder=op.permitido;
   for(const op of L.out)if(op.t==="valores"){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
   if(firstSync&&was&&m.banqueiro&&was!==m.banqueiro&&L.me){
@@ -498,7 +511,10 @@ function mergeTit(rows,notify){
   for(const r of rows||[]){
     if(!r||(r.mesa&&r.mesa!==L.codigo)||!CARDS[r.carta])continue;
     const was=L.tit[r.carta]||blankTit(r.carta);
-    L.tit[r.carta]={carta:r.carta,dono:r.dono||null,casas:r.casas||0,hipotecada:!!r.hipotecada,oferta:r.oferta||null,pedido:r.pedido||null};
+    L.tit[r.carta]={carta:r.carta,dono:r.dono||null,casas:r.casas||0,hipotecada:!!r.hipotecada,oferta:r.oferta||null,pedido:r.pedido||null,venda_para:r.venda_para||null,venda_preco:r.venda_preco==null?null:r.venda_preco};
+    if(notify&&r.venda_para===L.me&&was.venda_para!==L.me){play("ask");if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
+    if(notify&&was.dono===L.me&&was.venda_para&&r.dono===was.venda_para){const c=CARDS[r.carta];toast(`${nameOf(r.dono)} comprou ${c.nome}${was.venda_preco?" por "+money(was.venda_preco):""}`);play("recv")}
+    else if(notify&&was.dono===L.me&&was.venda_para&&!r.venda_para&&r.dono===L.me){const c=CARDS[r.carta];toast(`${nameOf(was.venda_para)} não quis comprar ${c.nome}`);play("err")}
     if(notify&&r.oferta===L.me&&was.oferta!==L.me){play("ask");if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
     if(notify&&was.pedido===L.me&&r.pedido!==L.me&&!was.dono){const c=CARDS[r.carta];if(r.dono===L.me){toast(`O banqueiro autorizou: ${c.nome} é sua!`);play("go");setTimeout(flashCard,50)}else if(!r.dono||r.dono!==L.me){toast(`O banqueiro recusou seu pedido de ${c.nome}`);play("err")}}
     if(notify&&r.pedido&&r.pedido!==was.pedido&&!r.dono&&iAmBanker()&&r.pedido!==L.me){play("ask");if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
@@ -620,6 +636,7 @@ function render(){
   if(!$("#cardSheet").hidden)drawCard();
   if(!$("#b3d").hidden&&!b3.ptrs.size)drawBoard3d();
   drawOffer(D);
+  drawEnd();
   {const mine=Object.values(D.Tit).filter(t=>t.dono===L.me).length;$("#cardsSub").textContent=mine?`Você tem ${mine} ${mine===1?"carta":"cartas"} · propriedades, casas e hipotecas`:"Propriedades, casas e hipotecas"}
   const boss=iAmBanker(),bk=banker();
   const bal=balances(D),c=colorOf(meP.cor),card=$("#card");
@@ -959,7 +976,9 @@ async function openScan(){
       if(!code){$("#scanMsg").textContent="Esse QR code não é de uma mesa do PORTI BANK";return}
       box.classList.add("hit");$("#scanMsg").textContent="Mesa "+code+"! Entrando…";play("go");
       try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}
-      stopScan(true);setTimeout(()=>{$("#scan").hidden=true;openMesa(code)},350);
+      stopScan(true);
+      if(L&&L.codigo===code){setTimeout(()=>{$("#scan").hidden=true;toast("Você já está nessa mesa.")},350);return}
+      setTimeout(()=>{$("#scan").hidden=true;openMesa(code)},350);
     };
     tick();
   }catch(e){
@@ -975,6 +994,7 @@ function stopScan(keep){
   if(!keep)$("#scan").hidden=true;
 }
 $("#scanBtn").onclick=openScan;
+$("#scanBtn2").onclick=openScan;
 $("#scanClose").onclick=()=>{stopScan();play("tap")};
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&scanStream)stopScan()});
 $("#resumeBtn").onclick=()=>{const last=ls.get("pb-ultima");if(last)openMesa(last)};
@@ -1179,7 +1199,7 @@ function openSheet(kind,actor,nfc){
 let shMore=false,shWhy=false;
 function sheetOn(){document.body.classList.toggle("sheeton",!!document.querySelector(".sheet:not([hidden])"))}
 new MutationObserver(sheetOn).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
-function closeSheets(){$("#scrim").hidden=true;["#sheet","#plSheet","#cardsSheet","#cardSheet","#invSheet","#bankSheet","#valSheet"].forEach(s=>$(s).hidden=true);try{document.activeElement&&document.activeElement.blur()}catch(e){}}
+function closeSheets(){$("#scrim").hidden=true;["#sheet","#plSheet","#cardsSheet","#cardSheet","#invSheet","#bankSheet","#valSheet","#scoreSheet","#diceSheet"].forEach(s=>$(s).hidden=true);try{document.activeElement&&document.activeElement.blur()}catch(e){}}
 function shortName(n){n=String(n||"").trim();const f=n.split(/\s+/)[0];return f.length>9?f.slice(0,8)+"…":f}
 function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
@@ -1418,7 +1438,7 @@ const BUMP_WIN=1500,BUMP_SAME=900,BUMP_LATE=8000;
 var bumpCh=null,bumpCode=null,motionOK=false,motionAsked=false,lastKnock=0,recentPeers=[],bumpMode=null,bumpT=null;
 function bumpOpen(code){
   if(bumpCode===code)return;if(bumpCh){bumpCh.close();bumpCh=null}bumpCode=code;
-  if(API&&API.bumps)bumpCh=API.bumps(code,bumpIn);
+  if(API&&API.bumps){bumpCh=API.bumps(code,bumpIn,posIn);setTimeout(()=>posSend(false),1500)}
 }
 function bumpSend(role){if(bumpCh&&L&&L.me)bumpCh.send({id:L.me,role,mesa:L.codigo,t:lastKnock})}
 function askMotion(){
@@ -1525,7 +1545,7 @@ document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()}
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
 window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
 /* ================= CARTAS (UI) ================= */
-var cdOpen=null,cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
+var ccSale=null,ccSalePrice="",cdOpen=null,cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
 const HOUSE_SVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 7.4 8 2.4l5.8 5v6.2H2.2z"/><path d="M6.4 13.6V10h3.2v3.6"/></svg>';
 const TOWER_SVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 14V6h4v8M7 14V2h6v12M2 14h12"/><path d="M9 5h2M9 8h2M9 11h2"/></svg>';
 const GLOBE_SVG='<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/><ellipse cx="50" cy="50" rx="20" ry="46"/><ellipse cx="50" cy="50" rx="38" ry="46"/><path d="M50 4v92M4 50h92M10 28h80M10 72h80"/></svg>';
@@ -1636,6 +1656,12 @@ function cdEnd(drop){
   cdDragJust=true;setTimeout(()=>cdDragJust=false,350);
   if(drop){
     const c=CARDS[d.card],D=derive(),p=D.P[drop],t=D.Tit[d.card]||blankTit(d.card);if(!p){drawCards();return}
+    if(t.dono){
+      if(drop===t.dono){drawCards();return}
+      openCard(d.card);ccSale=drop;ccSalePrice="";drawCard();play("tap");toast(`Combine o preço com ${p.nome} e arraste para oferecer`);
+      setTimeout(()=>{const tile=document.querySelector("#ccSalePrice");if(tile)tile.scrollIntoView({block:"center",behavior:"smooth"})},120);
+      return;
+    }
     if(!iAmBanker()){
       if(drop!==L.me){toast("Arraste a carta até você. Só o banqueiro vende para outras pessoas.");play("err")}
       else if(t.pedido===L.me)toast(`Você já pediu ${c.nome}. Esperando o banqueiro.`);
@@ -1647,8 +1673,9 @@ function cdEnd(drop){
 }
 $("#cdGroups").addEventListener("pointerdown",e=>{
   const el=e.target.closest("[data-card]");if(!el||!L||!L.me)return;
-  const id=+el.dataset.card,t=derive().Tit[id];if(t&&t.dono)return;
-  if(!iAmBanker()&&t&&t.pedido&&t.pedido!==L.me)return;
+  const id=+el.dataset.card,t=derive().Tit[id];
+  if(t&&t.dono&&t.dono!==L.me&&!iAmBanker())return;
+  if(!(t&&t.dono)&&!iAmBanker()&&t&&t.pedido&&t.pedido!==L.me)return;
   const x0=e.clientX,y0=e.clientY;
   clearTimeout(cdHold);
   cdHold=setTimeout(()=>{
@@ -1679,7 +1706,7 @@ document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closes
 
 /* one card in detail */
 function openCard(id){
-  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;
+  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;ccSale=null;ccSalePrice="";
   $("#cardSheet").hidden=false;$("#scrim").hidden=false;$("#ccBody").scrollTop=0;drawCard();
 }
 function closeCard(){$("#cardSheet").hidden=true;$("#cardSheet").classList.remove("over3d");if($("#cardsSheet").hidden)$("#scrim").hidden=true}
@@ -1691,7 +1718,8 @@ function drawCard(){
   $("#ccName").textContent=c.nome;$("#ccCountry").textContent=c.pais;
   let h="";
   /* who has it */
-  if(owner)h+=`<div class="ccown">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""}<small>${t.hipotecada?"Hipotecada · não cobra aluguel":c.acao?"Dono da ação":t.casas>=5?"Com condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:"Sem casas"}</small></div></div>`;
+  if(owner&&t.venda_para)h+=`<div class="ccown sale">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""} está vendendo para ${esc(nameOf(t.venda_para,D))}<small>Por ${money(t.venda_preco||0)} · esperando ${t.venda_para===me?"você":"a pessoa"} confirmar</small></div></div>`;
+  else if(owner)h+=`<div class="ccown">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""}<small>${t.hipotecada?"Hipotecada · não cobra aluguel":c.acao?"Dono da ação":t.casas>=5?"Com condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:"Sem casas"}</small></div></div>`;
   else if(t.pedido&&!t.oferta){const p=D.P[t.pedido];h+=`<div class="ccown">${p?avatar(p):""}<div>${t.pedido===me?"Você pediu esta carta":"Pedida por "+esc(p?p.nome:"?")}<small>Esperando o banqueiro autorizar a compra de ${money(c.preco)}</small></div></div>`}
   else if(t.oferta){const p=D.P[t.oferta];h+=`<div class="ccown">${p?avatar(p):""}<div>Oferecida a ${esc(p?p.nome:"?")}<small>Esperando confirmar a compra de ${money(c.preco)}</small></div></div>`}
   else h+=`<div class="ccown"><div>Livre no banco<small>Preço ${money(c.preco)}</small></div></div>`;
@@ -1718,13 +1746,27 @@ function drawCard(){
         (ccSell?slide("ofertar",`Arraste para vender a ${esc(shortName(nameOf(ccSell,D)))}`,money(c.preco)+" · a pessoa confirma no celular","buy",` data-to="${esc(ccSell)}"`):`<p class="ccnote">Escolha quem comprou. Na lista de cartas você também pode segurar a carta e arrastar até a pessoa.</p>`)+
         (t.oferta?`<button class="btn ghost small" data-cc="recusar" type="button">Cancelar a oferta para ${esc(shortName(nameOf(t.oferta,D)))}</button>`:""));
     }
-  }else if(mine||boss){
+  }else{
+    if(t.venda_para===me)a+=tile(`${esc(shortName(nameOf(t.dono,D)))} quer te vender`,slide("aceitar_venda","Arraste para comprar",`Paga ${money(t.venda_preco||0)} para ${esc(shortName(nameOf(t.dono,D)))}`,"buy")+`<button class="btn ghost small" data-cc="recusar" type="button">Não quero</button>`);
+  }
+  if(t.dono&&(mine||boss)){
     if(!c.acao){
       const hs=[1,2,3,4].map(n=>`<i class="${t.casas>=n?"on":""}"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z"/></svg></i>`).join("")+`<i class="cond ${t.casas>=5?"on":""}"><svg viewBox="0 0 24 24"><path d="M4 20V8h7v12M11 20V4h9v16M3 20h18M14 8h3M14 11h3M14 14h3M6.5 11h2M6.5 14h2"/></svg></i>`;
-      a+=tile("Construção",`<div class="chouses">${hs}</div>`+(t.hipotecada?`<p class="ccnote">Pague a hipoteca para voltar a construir.</p>`:t.casas>=5?`<p class="ccnote">Já tem condomínio. Aluguel máximo: ${money(c.al[5])}.</p>`:
+      const gg=groupGap(D.Tit,c,t.dono),gname=(GRUPOS.find(x=>x.k===c.g)||{}).n||"";
+      a+=tile("Construção",`<div class="chouses">${hs}</div>`+(t.hipotecada?`<p class="ccnote">Pague a hipoteca para voltar a construir.</p>`:!gg.ok&&t.casas<5?`<p class="ccnote grp">${gg.missing.length?`Para construir, junte a cor ${esc(gname.toLowerCase())} inteira. Falta: <b>${gg.missing.map(id=>esc(CARDS[id].nome)+((D.Tit[id]||{}).dono?` (de ${esc(shortName(nameOf(D.Tit[id].dono,D)))})`:" (livre)")).join(", ")}</b>.`:`Pague a hipoteca de <b>${gg.hip.map(id=>esc(CARDS[id].nome)).join(", ")}</b> para construir nesta cor.`}</p>`:t.casas>=5?`<p class="ccnote">Já tem condomínio. Aluguel máximo: ${money(c.al[5])}.</p>`:
         slide("construir",t.casas===4?"Arraste para construir o condomínio":`Arraste para construir a ${t.casas+1}ª casa`,`Paga ${money(c.casa)} · aluguel vai para ${money(c.al[t.casas+1])}`,"build")));
     }
     a+=tile("Hipoteca",t.hipotecada?slide("resgatar","Arraste para pagar a hipoteca",`Paga ${money(c.hip)} ao banco`,"pay"):slide("hipotecar","Arraste para hipotecar",`Recebe ${money(c.hip)} do banco · para de cobrar aluguel`,"hip"));
+    {
+      const others=playersArr(D).filter(p=>p.id!==t.dono);
+      if(t.venda_para)a+=tile("Venda para outro jogador",`<p class="ccnote">Oferecida a ${esc(nameOf(t.venda_para,D))} por ${money(t.venda_preco||0)}. Quando a pessoa confirmar no celular, o dinheiro cai para ${mine?"você":esc(shortName(nameOf(t.dono,D)))}.</p><button class="btn ghost small" data-cc="recusar" type="button">Cancelar a venda</button>`);
+      else if(others.length){
+        if(ccSale&&!D.P[ccSale])ccSale=null;
+        const pr=ccSalePrice===""?c.preco:parseAmt(ccSalePrice);
+        a+=tile("Vender para outro jogador",`<div class="fchips">${others.map(p=>`<button type="button" data-sale="${esc(p.id)}" aria-pressed="${ccSale===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>`+
+          (ccSale?`<label class="saleprice">Preço combinado<input class="inp num" id="ccSalePrice" inputmode="numeric" autocomplete="off" value="${pr?pr.toLocaleString("pt-BR"):""}"></label>`+slide("vender",`Arraste para oferecer a ${esc(shortName(nameOf(ccSale,D)))}`,`por ${money(pr||0)} · a pessoa confirma no celular`,"buy",` data-to="${esc(ccSale)}"`):`<p class="ccnote">Escolha quem vai comprar e combine o preço. A carta vai com as casas e a hipoteca que tiver.</p>`));
+      }
+    }
     if(boss)a+=tile("Banqueiro",(t.casas>0?`<button class="btn ghost small" data-cc="tirar_casa" type="button">Tirar 1 ${t.casas>=5?"(condomínio)":"casa"} · sem mexer no dinheiro</button>`:"")+slide("devolver","Arraste para devolver ao banco","A carta fica livre","danger"));
   }
   if(a)h+=a;
@@ -1739,10 +1781,16 @@ function drawCard(){
   }
   $("#ccBody").innerHTML=h;
 }
+$("#ccBody").addEventListener("input",e=>{
+  if(e.target.id!=="ccSalePrice")return;
+  fmtInput(e.target);ccSalePrice=e.target.value;
+  const sm=document.querySelector('#ccBody [data-sl="vender"] .sl-txt small');if(sm)sm.textContent=`por ${money(parseAmt(ccSalePrice)||0)} · a pessoa confirma no celular`;
+});
 $("#ccBody").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
   if(b.dataset.offer){ccSell=b.dataset.offer;play("tap");drawCard();return}
+  if(b.dataset.sale){ccSale=ccSale===b.dataset.sale?null:b.dataset.sale;play("tap");drawCard();return}
   if(b.dataset.payer){ccPayer=b.dataset.payer;play("tap");drawCard();return}
   if(b.dataset.dice){ccDice=+b.dataset.dice;play("tap");drawCard();return}
   const k=b.dataset.cc;if(!k)return;
@@ -1758,6 +1806,10 @@ function ccDo(k,to){
     toast(`${nameOf(ccPayer,D)} pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});
     ccPayer=null;ccDice=0;drawCard();return;
   }
+  if(k==="vender"){
+    if(!to)return;const pr=ccSalePrice===""?c.preco:parseAmt(ccSalePrice);
+    titOp(c.id,"vender",to,pr||0);play("pay");toast(`${c.nome} oferecida a ${nameOf(to,D)} por ${money(pr||0)}. Esperando confirmar.`);ccSale=null;ccSalePrice="";drawCard();return}
+  if(k==="aceitar_venda"){if(t.venda_para!==L.me)return;const pr=t.venda_preco||0,from=t.dono;titOp(c.id,"aceitar_venda",null,pr);play("go");flashCard();toast(`Você comprou ${c.nome} de ${nameOf(from,D)}${pr?" por "+money(pr):""}!`);drawCard();return}
   if(k==="pedir"){titOp(c.id,"pedir");play("ask");toast(`Pedido enviado. Esperando o banqueiro autorizar.`);drawCard();return}
   if(k==="autorizar"){if(!t.pedido)return;const who=t.pedido;titOp(c.id,"comprar",who);play("go");toast(`Compra autorizada: ${c.nome} para ${nameOf(who,D)}`);drawCard();return}
   if(k==="ofertar"){if(!to)return;titOp(c.id,"ofertar",to);play("pay");toast(`${c.nome} oferecida a ${nameOf(to,D)}. Esperando confirmar.`);drawCard();return}
@@ -1792,7 +1844,7 @@ function slEnd(){
     s2.k.style.transform=`translateX(${s2.max}px)`;s2.sl.querySelector(".sl-fill").style.width="100%";s2.sl.classList.add("done");
     try{navigator.vibrate&&navigator.vibrate(30)}catch(err){}
     const act=s2.sl.dataset.sl,to=s2.sl.dataset.to;
-    setTimeout(()=>{if(s2.sl.closest("#offerIn"))offerDo(act);else ccDo(act,to)},180);
+    setTimeout(()=>{if(s2.sl.closest("#offerIn"))offerDo(act);else if(s2.sl.closest("#scBody"))scoreDo(act);else if(s2.sl.closest("#b3Land"))landDo(act);else ccDo(act,to)},180);
   }else{
     s2.k.style.transition="transform .25s";s2.sl.querySelector(".sl-fill").style.transition="width .25s";
     s2.k.style.transform="";s2.sl.querySelector(".sl-fill").style.width="";
@@ -1807,6 +1859,19 @@ let offerShown=null,offerKind=null;const reqSnooze=new Set();
 function drawOffer(D){
   const box=$("#offerBox");
   const mine=L&&L.me?Object.values(D.Tit).find(t=>t.oferta===L.me&&!t.dono):null;
+  const sale=!mine&&L&&L.me?Object.values(D.Tit).find(t=>t.venda_para===L.me&&t.dono&&t.dono!==L.me):null;
+  if(sale){
+    const c=CARDS[sale.carta],key="v"+c.id+":"+sale.venda_preco;
+    if(offerShown===key&&!box.hidden)return;
+    offerShown=key;offerKind="venda";
+    const from=D.P[sale.dono]||{nome:"?"},bal=balances(D)[L.me]||0,pr=sale.venda_preco||0;
+    $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
+      <div class="obody"><p class="oreq">${avatar(from)}<span><b>${esc(from.nome)}</b> quer te vender esta carta</span></p><div class="oprice">${money(pr)}</div>
+      <p>${sale.casas>=5?"Com condomínio · ":sale.casas?`Com ${sale.casas} ${sale.casas>1?"casas":"casa"} · `:""}${sale.hipotecada?"Hipotecada · ":""}${c.acao?`Aluguel: dados × ${money(c.mult)}`:`Aluguel agora: ${money(c.al[sale.casas||0])}`}${pr>bal?"<br>Seu saldo vai ficar negativo":""}</p>
+      <div class="slide buy" data-sl="aceitar_venda"><div class="sl-fill"></div><span class="sl-txt">Arraste para comprar</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>
+      <button class="btn ghost small" data-of="recusar" type="button">Não quero</button></div>`;
+    box.hidden=false;return;
+  }
   if(!mine){
     const req=L&&L.me&&iAmBanker()?Object.values(D.Tit).find(t=>t.pedido&&!t.dono&&t.pedido!==L.me&&D.P[t.pedido]&&!reqSnooze.has(t.carta+":"+t.pedido)):null;
     if(!req){box.hidden=true;offerShown=null;offerKind=null;return}
@@ -1832,6 +1897,14 @@ function drawOffer(D){
   box.hidden=false;
 }
 function offerDo(k){
+  if(offerKind==="venda"){
+    const D=derive(),t=Object.values(D.Tit).find(x=>x.venda_para===L.me&&x.dono);$("#offerBox").hidden=true;offerShown=null;
+    if(!t){render();return}
+    const c=CARDS[t.carta],pr=t.venda_preco||0,from=t.dono;
+    if(k==="aceitar_venda"){titOp(t.carta,"aceitar_venda",null,pr);play("go");flashCard();toast(`Você comprou ${c.nome} de ${nameOf(from,D)}${pr?" por "+money(pr):""}!`)}
+    else{titOp(t.carta,"recusar");play("undo");toast("Compra recusada")}
+    return;
+  }
   if(offerKind==="pedido"){
     const D=derive(),t=Object.values(D.Tit).find(x=>x.pedido&&!x.dono&&("r"+x.carta+":"+x.pedido)===offerShown);
     $("#offerBox").hidden=true;offerShown=null;
@@ -1850,12 +1923,167 @@ function offerDo(k){
 $("#offerBox").addEventListener("click",e=>{
   const b=e.target.closest("[data-of]");if(!b)return;offerDo(b.dataset.of);
 });
+/* ================= PLACAR: patrimônio e fim de jogo ================= */
+/* patrimônio = saldo + cartas (preço; hipotecada vale preço − hipoteca) + casas (preço de cada casa; condomínio = 5) */
+function worth(D,id,bal){
+  let cards=0,houses=0,n=0,nh=0;
+  for(const t of Object.values(D.Tit)){
+    if(t.dono!==id)continue;const c=CARDS[t.carta];if(!c)continue;
+    n++;cards+=c.preco-(t.hipotecada?c.hip:0);houses+=(t.casas||0)*(c.casa||0);nh+=t.casas||0;
+  }
+  return{saldo:bal,cards,houses,n,nh,total:bal+cards+houses};
+}
+function scoreList(D,reveal){
+  const bal=balances(D),canHide=!L.mesa||L.mesa.esconder!==false;
+  return playersArr(D).map(p=>{const w=worth(D,p.id,bal[p.id]||0);w.p=p;w.hid=!reveal&&canHide&&p.oculto&&p.id!==L.me;return w})
+    .sort((a,b)=>(a.hid-b.hid)||(b.total-a.total));
+}
+function openScore(){closeSheets();$("#scrim").hidden=false;$("#scoreSheet").hidden=false;$("#scBody").scrollTop=0;drawScore();play("tap")}
+function drawScore(){
+  if($("#scoreSheet").hidden||(slState&&slState.sl&&slState.sl.closest("#scBody")))return;
+  const D=derive(),end=isEnded(),list=scoreList(D,end),boss=iAmBanker();
+  $("#scSub").textContent=end?"Partida encerrada · resultado final":"Saldo + cartas + casas";
+  let h=list.map((w,i)=>`<div class="scrow${i===0&&!w.hid?" p1":""}${!w.hid&&w.total<0?" neg":""}"><span class="pos">${w.hid?"—":i+1}</span>${avatar(w.p)}<span class="nmx"><b>${esc(w.p.nome)}${w.p.id===L.me?" (você)":""}</b><small>${w.hid?"Saldo oculto":"Saldo "+fmt(w.saldo)} · ${w.n} ${w.n===1?"carta":"cartas"} ${money(w.cards)}${w.nh?` · casas ${money(w.houses)}`:""}</small></span><span class="tot">${w.hid?MASK:fmt(w.total)}<small>patrimônio</small></span></div>`).join("");
+  h+=`<p class="scnote">Cartas valem o preço de compra (hipotecada vale o preço menos a hipoteca). Cada casa vale o que custou para construir; o condomínio vale 5 casas.</p>`;
+  if(boss)h+=`<div class="ctile"><h4>Banqueiro</h4>${end?`<button class="btn ghost small" data-sc="reabrir" type="button">Reabrir a partida</button>`:`<div class="slide danger" data-sl="encerrar"><div class="sl-fill"></div><span class="sl-txt">Arraste para encerrar a partida<small>Todos veem o resultado final</small></span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`}</div>`;
+  else if(end)h+=`<button class="btn small" data-sc="final" type="button">Ver o pódio</button>`;
+  $("#scBody").innerHTML=h;
+}
+function scoreDo(k){
+  if(k==="encerrar"&&iAmBanker()){enqueue({t:"encerrar",encerrada:true,por:L.me,em:nowIso()});play("go");closeSheets();finalAuto=null;render()}
+}
+$("#scBody").addEventListener("click",e=>{const b=e.target.closest("[data-sc]");if(!b)return;
+  if(b.dataset.sc==="reabrir"){enqueue({t:"encerrar",encerrada:false,por:L.me,em:nowIso()});play("undo");toast("Partida reaberta");drawScore()}
+  else if(b.dataset.sc==="final"){closeSheets();showFinal()}});
+$("#scClose").onclick=closeSheets;
+$("#aScore").onclick=openScore;
+var finalAuto=null;
+function showFinal(){
+  const D=derive(),list=scoreList(D,true),top=list.slice(0,3),rest=list.slice(3);
+  const pod=(w,k)=>w?`<div class="pod p${k}">${k===1?'<span class="crown">👑</span>':""}${avatar(w.p)}<b>${esc(shortName(w.p.nome))}</b><small>${fmt(w.total)}</small><div class="step">${k}</div></div>`:`<div class="pod p${k}"></div>`;
+  $("#finalIn").innerHTML=`<h2 id="fnTitle">${top[0]?esc(top[0].p.nome)+" venceu!":"Fim de jogo"}</h2><p class="fsub">Resultado pelo patrimônio: saldo + cartas + casas</p>
+    <div class="podium">${pod(top[1],2)}${pod(top[0],1)}${pod(top[2],3)}</div>
+    ${rest.length?`<div class="finalrest">${rest.map((w,i)=>`<div><span>${i+4}º ${esc(w.p.nome)}</span><span>${fmt(w.total)}</span></div>`).join("")}</div>`:""}
+    <button class="btn" id="finalClose" type="button">Ver a mesa</button>`;
+  $("#final").hidden=false;play("go");
+  $("#finalClose").onclick=()=>{$("#final").hidden=true;play("tap")};
+}
+$("#endShow").onclick=showFinal;
+function isEnded(){if(!L||!L.mesa)return false;let e=!!L.mesa.encerrada;for(const op of L.out)if(op.t==="encerrar")e=op.encerrada;return e}
+function drawEnd(){
+  const end=isEnded();
+  $("#endBanner").hidden=!end;
+  if(end&&finalAuto!==L.codigo){finalAuto=L.codigo;setTimeout(showFinal,200)}
+  if(!end){finalAuto=null;$("#final").hidden=true}
+  drawScore();
+}
+
 /* ================= TABULEIRO 3D (CSS 3D, sem bibliotecas) ================= */
+/* ---------- onde cada um está, dados e onde vai parar ---------- */
+const PAWN_SVG='<svg viewBox="0 0 40 62" aria-hidden="true"><path class="pc" d="M6 55c0-3 4-4.5 14-4.5S34 52 34 55v2c0 3-5 4.5-14 4.5S6 60 6 57zM15 25c0 10-5 17-5.5 25.5h21C30 42 25 35 25 25zM10.5 24.5c0-2 4-3 9.5-3s9.5 1 9.5 3-4 3-9.5 3-9.5-1-9.5-3zM20 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20z"/><ellipse cx="16" cy="9" rx="3" ry="4" fill="#fff" fill-opacity=".55"/></svg>';
+function sqName(i){const q=BOARD[i];if(!q)return"?";if(q.c)return q.c;if(q.id)return CARDS[q.id].nome;return /FMI/.test(q.s)?(/Restitui/.test(q.s)?"Restituição do FMI":"Dívidas FMI"):"Sorte ou Revés"}
+function sqColor(i){const q=BOARD[i];if(!q)return"#ddd";if(q.id)return CARDS[q.id].acao?"#3a3a46":CARDS[q.id].cor;if(q.c)return q.k.includes("cadeia")?"#FF8A5B":q.k.includes("ferias")?"#46D3D9":q.k.includes("vai")?"#B48CFF":"#FF9A1F";return /FMI/.test(q.s)?"#1d1c23":"#e9e9ee"}
+function posMap(){return(L&&L.pos)||{}}
+function myPos(){const p=posMap()[L&&L.me];return typeof p==="number"?p:0}
+let posLast=0;
+function posSend(reply){if(!bumpCh||!bumpCh.sendPos||!L||!L.me)return;const p=posMap()[L.me];if(typeof p!=="number")return;posLast=Date.now();bumpCh.sendPos({id:L.me,mesa:L.codigo,pos:p,reply:!!reply})}
+function posIn(m){
+  if(!L||!m||!m.id||m.id===L.me||(m.mesa&&m.mesa!==L.codigo)||typeof m.pos!=="number"||m.pos<0||m.pos>39)return;
+  L.pos=L.pos||{};const changed=L.pos[m.id]!==m.pos;L.pos[m.id]=m.pos;save();
+  if(!m.reply&&Date.now()-posLast>3000)posSend(true);
+  if(changed&&!$("#b3d").hidden&&!b3.ptrs.size)drawBoard3d();
+  if(changed&&!$("#cardsSheet").hidden&&!b3.ptrs.size&&!b3full())drawBoard3d();
+}
+function setMyPos(i,announce){if(!L||!L.me)return;L.pos=L.pos||{};L.pos[L.me]=i;b3.land=null;save();if(announce!==false)posSend(false);if(!$("#b3d").hidden||!$("#cardsSheet").hidden)drawBoard3d();if(!$("#diceSheet").hidden)drawDice()}
+function pawnsAt(i,D,w,ht,p){
+  const who=Object.entries(posMap()).filter(([id,q])=>q===i&&D.P[id]&&!D.P[id].removido);if(!who.length)return"";
+  who.sort((a,b)=>(a[0]===L.me)-(b[0]===L.me));
+  const n=who.length,sp=Math.min(16,(Math.min(w,ht)-14)/Math.max(1,n-1));
+  return `<div class="b3pawns" style="transform:translateZ(4px)">${who.map(([id],k)=>{const off=(k-(n-1)/2)*sp,ox=p.inx?0:off,oy=p.iny?0:off,ix=-p.inx*Math.max(w,ht)*.12,iy=-p.iny*Math.max(w,ht)*.12;
+    return `<div class="b3pw${id===L.me?" me":""}" data-off="translate(${(ox+ix).toFixed(1)}px,${(oy+iy).toFixed(1)}px)" style="--pc:${colorOf(D.P[id].cor).c}">${PAWN_SVG}</div>`}).join("")}</div>`;
+}
+function b3pickStart(){b3.pick=true;$("#b3PickBar").hidden=false;$("#b3dStage").classList.add("picking");const b=document.querySelector('.b3dtools [data-v="here"]');if(b)b.setAttribute("aria-pressed","true")}
+function b3pickEnd(silent){b3.pick=false;const bar=$("#b3PickBar");if(bar)bar.hidden=true;$("#b3dStage").classList.remove("picking");const b=document.querySelector('.b3dtools [data-v="here"]');if(b)b.setAttribute("aria-pressed","false")}
+$("#b3PickCancel").onclick=()=>{b3pickEnd();play("tap")};
+/* dice */
+var DC={d1:0,d2:0,sum:0,rolling:false};
+function openDice(){closeSheets();DC={d1:0,d2:0,sum:0,rolling:false};b3.land=null;$("#scrim").hidden=false;$("#diceSheet").hidden=false;$("#b3Land").scrollTop=0;drawDice();play("tap")}
+function landInfo(from,n){
+  const raw=from+n,passGo=raw>=40,to=raw%40,path=[];for(let k=1;k<n;k++)path.push((from+k)%40);
+  return{from,to,n,passGo,path,sq:BOARD[to]};
+}
+function drawDice(){
+  if($("#diceSheet").hidden)return;
+  if(slState&&slState.sl&&slState.sl.closest("#b3Land"))return;
+  const D=derive(),me=L.me,from=myPos(),pips='<i></i>'.repeat(9);
+  let h=`<div class="dhere" style="--tc:${sqColor(from)}"><span class="sw"></span><div><small>Você está em</small><b>${esc(sqName(from))}</b></div><button type="button" data-dc="pick">Mudar</button></div>`;
+  h+=`<div class="dicebox">${DC.sum&&!DC.d1?`<div class="dbig">${DC.sum}</div>`:`<div class="dicepair${DC.rolling?" rolling":""}"><div class="die v${DC.d1}">${pips}</div><div class="die v${DC.d2}">${pips}</div></div>`}
+    ${DC.sum&&!DC.rolling&&DC.d1?`<div class="dsum">${DC.d1&&DC.d2?`${DC.d1} + ${DC.d2} = `:""}${DC.sum}${DC.d1&&DC.d1===DC.d2?" · dupla!":""}</div>`:""}
+    <button class="btn" type="button" data-dc="roll"${DC.rolling?" disabled":""}>${DC.sum?"Rolar de novo":"Rolar os dados"}</button></div>`;
+  h+=`<div class="dnums"><h4>Ou toque no que saiu nos dados da mesa</h4><div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dn="${n}" aria-pressed="${DC.sum===n&&!DC.d1}">${n}</button>`).join("")}</div></div>`;
+  if(DC.sum&&!DC.rolling){
+    const li=landInfo(from,DC.sum),q=li.sq;
+    let title=sqName(li.to),sub="",info="",acts="";
+    const goNote=li.passGo?`<b>Passou pela partida:</b> + ${money(L.mesa.salario)}. `:"";
+    if(q.id){
+      const c=CARDS[q.id],t=D.Tit[c.id]||blankTit(c.id),own=t.dono&&D.P[t.dono];
+      sub=c.pais;
+      if(!t.dono){info=`${goNote}Livre no banco por <b>${money(c.preco)}</b>.`;acts=iAmBanker()?slideHTML("buy_land","Arraste para comprar",`${money(c.preco)} ao banco`,"buy"):(t.pedido&&t.pedido!==me?"":slideHTML("ask_land","Arraste para pedir a compra",`${money(c.preco)} · o banqueiro autoriza`,"buy"))}
+      else if(t.dono===me)info=`${goNote}Essa é sua. Não paga nada.`;
+      else if(t.hipotecada)info=`${goNote}De ${esc(own.nome)}, mas está hipotecada: não paga aluguel.`;
+      else{const v=c.acao?DC.sum*c.mult:c.al[t.casas||0];info=`${goNote}De <b>${esc(own.nome)}</b>. Aluguel: <b>${money(v)}</b>${c.acao?` (${DC.sum} × ${money(c.mult)})`:t.casas>=5?" com condomínio":t.casas?` com ${t.casas} ${t.casas>1?"casas":"casa"}`:""}.`;acts=slideHTML("rent_land",`Arraste: pagar ${money(v)} a ${esc(shortName(own.nome))}`,"Aluguel de "+esc(c.nome),"rent")}
+    }else if(q.c==="Vá para a cadeia"){info=`Vai para a <b>Cadeia</b>! Não recebe a partida.`}
+    else if(q.c==="Cadeia")info=`${goNote}Só visitando a cadeia.`;
+    else if(q.c==="Férias")info=`${goNote}Férias! Descanse um pouco.`;
+    else if(q.c==="Início")info=`Caiu no Início: + ${money(L.mesa.salario)}.`;
+    else if(/FMI/.test(q.s))info=`${goNote}${/Restitui/.test(q.s)?"Restituição do FMI: o banco paga 2000× a soma dos dados.":"Dívidas FMI: paga 2000× a soma dos dados ao banco."}`;
+    else info=`${goNote}Pegue uma carta de <b>Sorte ou Revés</b> na mesa.`;
+    const salaryAct=(li.passGo||li.to===0)&&q.c!=="Vá para a cadeia"?slideHTML("go_land","Arraste para receber a partida","+ "+money(L.mesa.salario),"pay"):"";
+    h+=`<div class="dland"><div class="lt"><span class="sw" style="--tc:${sqColor(li.to)}">${li.n}</span><div><small>Andando ${li.n} ${li.n===1?"casa":"casas"}, você para em</small><b>${esc(title)}</b>${sub?`<em>${esc(sub)}</em>`:""}</div></div>
+      <p class="dinfo">${info}</p>
+      <div class="dbtns"><button class="btn ghost" type="button" data-dc="see">Ver no tabuleiro</button><button class="btn" type="button" data-dc="move">Andar até lá</button></div>
+      ${salaryAct}${acts}</div>`;
+  }
+  $("#b3Land").innerHTML=h;
+}
+function slideHTML(act,label,sub,tone){return `<div class="slide ${tone||""}" data-sl="${act}"><div class="sl-fill"></div><span class="sl-txt">${label}${sub?`<small>${sub}</small>`:""}</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`}
+function moveToLanding(){
+  if(!DC.sum)return null;const li=landInfo(myPos(),DC.sum);
+  const dest=BOARD[li.to]&&BOARD[li.to].c==="Vá para a cadeia"?10:li.to;
+  setMyPos(dest);return li;
+}
+function landDo(k){
+  const D=derive(),li=landInfo(myPos(),DC.sum),q=li.sq;
+  if(k==="go_land"){doSalary(L.me);drawDice();return}
+  if(q.id){
+    const c=CARDS[q.id],t=D.Tit[c.id]||blankTit(c.id);
+    if(k==="rent_land"&&t.dono&&t.dono!==L.me){const v=c.acao?DC.sum*c.mult:c.al[t.casas||0];const r=lancar(L.me,t.dono,v,("Aluguel: "+c.nome).slice(0,40));play("pay");flashCard();toast(`Você pagou ${money(v)} de aluguel a ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});moveToLanding();closeSheets();return}
+    if(k==="buy_land"&&!t.dono){titOp(c.id,"comprar",L.me);play("go");flashCard();toast(`Você comprou ${c.nome}!`);moveToLanding();closeSheets();return}
+    if(k==="ask_land"&&!t.dono){titOp(c.id,"pedir");play("ask");toast(`Pedido enviado: ${c.nome}. Esperando o banqueiro autorizar.`);moveToLanding();closeSheets();return}
+  }
+}
+$("#b3Land").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.dn){DC={d1:0,d2:0,sum:+b.dataset.dn,rolling:false};play("tap");drawDice();return}
+  const k=b.dataset.dc;if(!k)return;
+  if(k==="roll"){
+    if(DC.rolling)return;DC.rolling=true;DC.sum=0;play("tap");let n=0;
+    const spin=()=>{DC.d1=1+Math.floor(Math.random()*6);DC.d2=1+Math.floor(Math.random()*6);n++;
+      if(n<9){drawDice();tone(300+Math.random()*500,0,.04,"square",.05);setTimeout(spin,70)}
+      else{DC.rolling=false;DC.sum=DC.d1+DC.d2;play(DC.d1===DC.d2?"go":"recv");try{navigator.vibrate&&navigator.vibrate(30)}catch(e){}drawDice()}};
+    spin();return;
+  }
+  if(k==="pick"){closeSheets();openBoard3d();b3pickStart();return}
+  if(k==="see"){const li=landInfo(myPos(),DC.sum);b3.land=li;closeSheets();openBoard3d();return}
+  if(k==="move"){const li=moveToLanding();play("tap");if(li){toast(BOARD[li.to].c==="Vá para a cadeia"?"Foi para a cadeia!":"Você está em "+sqName(li.to));}closeSheets();return}
+});
+$("#dcClose").onclick=closeSheets;
+$("#aDice").onclick=openDice;
 const BOARD=[{c:"Início",k:"corner"},{id:7},{id:8},{id:27},{id:1},{id:9},{s:"Sorte ou Revés"},{id:10},{id:21},{id:11},
  {c:"Cadeia",k:"corner cadeia"},{s:"Sorte ou Revés"},{id:23},{id:24},{s:"Restituição do FMI · receba 2000×"},{id:17},{id:22},{id:18},{id:19},{id:13},
  {c:"Férias",k:"corner ferias"},{id:20},{id:25},{s:"Dívidas FMI · pague 2000×"},{s:"Sorte ou Revés"},{id:4},{id:3},{s:"Sorte ou Revés"},{id:2},{id:28},
  {c:"Vá para a cadeia",k:"corner vai"},{id:14},{s:"Sorte ou Revés"},{id:15},{id:16},{id:12},{id:26},{id:5},{s:"Sorte ou Revés"},{id:6}];
-var b3={yaw:-18,pitch:52,zoom:0,fit:1,hl:null,ptrs:new Map(),last:null,moved:0,t0:0};
+var b3={land:null,pick:false,yaw:-18,pitch:52,zoom:0,fit:1,hl:null,ptrs:new Map(),last:null,moved:0,t0:0};
 const skyCache={};
 function skyline(id){
   if(skyCache[id])return skyCache[id];
@@ -1915,9 +2143,10 @@ function drawBoard3d(){
   BOARD.forEach((sq,i)=>{
     const p=b3pos(i),w=(p.c===1||p.c===11)?corner:fr,ht=(p.r===1||p.r===11)?corner:fr;
     const style=`grid-row:${p.r};grid-column:${p.c};--w:${w}px;--h:${ht}px`;
-    if(sq.c){h+=`<div class="b3t ${sq.k} r${p.rot}" style="${style}"><div class="b3in">${CORNER_IC[sq.c]||""}<span class="b3nm">${sq.c.toUpperCase()}</span></div></div>`;return}
-    if(sq.s&&/FMI/.test(sq.s)){const rec=/Restitui/.test(sq.s);h+=`<div class="b3t fmi r${p.rot}" style="${style}"><div class="b3in"><span class="b3nm">${rec?"RESTITUIÇÃO DO FMI":"DÍVIDAS FMI"}<b>${rec?"RECEBA":"PAGUE"} 2000×</b></span></div></div>`;return}
-    if(sq.s){h+=`<div class="b3t sp r${p.rot}" style="${style}"><div class="b3in"><span class="b3nm">SORTE<i>ou</i>REVÉS</span></div></div>`;return}
+    const lp=b3.land&&b3.land.to===i?" land":b3.land&&b3.land.path.includes(i)?" path":"",pw=pawnsAt(i,D,w,ht,p);
+    if(sq.c){h+=`<div class="b3t ${sq.k} r${p.rot}${lp}" data-sq="${i}" style="${style}"><div class="b3in">${CORNER_IC[sq.c]||""}<span class="b3nm">${sq.c.toUpperCase()}</span></div>${pw}</div>`;return}
+    if(sq.s&&/FMI/.test(sq.s)){const rec=/Restitui/.test(sq.s);h+=`<div class="b3t fmi r${p.rot}${lp}" data-sq="${i}" style="${style}"><div class="b3in"><span class="b3nm">${rec?"RESTITUIÇÃO DO FMI":"DÍVIDAS FMI"}<b>${rec?"RECEBA":"PAGUE"} 2000×</b></span></div>${pw}</div>`;return}
+    if(sq.s){h+=`<div class="b3t sp r${p.rot}${lp}" data-sq="${i}" style="${style}"><div class="b3in"><span class="b3nm">SORTE<i>ou</i>REVÉS</span></div>${pw}</div>`;return}
     const c=CARDS[sq.id],t=D.Tit[c.id]||blankTit(c.id),own=t.dono&&D.P[t.dono];
     const oc=own?colorOf(own.cor).c:"";
     const hl=b3hl(),dim=hl&&(hl==="free"?!!t.dono:t.dono!==hl);
@@ -1930,7 +2159,7 @@ function drawBoard3d(){
       floor=`<span class="b3own">${avatar(own)}</span>`;
       extra=`<div class="b3aura"><i class="n"></i><i class="s"></i><i class="w"></i><i class="e"></i>${sparks}</div><div class="b3houses" style="transform:translateZ(1px)">${bld}</div>`;
     }
-    h+=`<div class="b3t r${p.rot}${c.acao?" acao":" prop"}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}" data-b3="${c.id}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}${c.acao?"":`;--sky:${skyline(c.id)}`}"><div class="b3in">${floor}<span class="b3nm">${esc(c.nome)}${c.acao?"":`<small>${esc(c.pais)}</small>`}</span><span class="b3pr">$${c.preco.toLocaleString("pt-BR")}</span></div>${extra}</div>`;
+    h+=`<div class="b3t r${p.rot}${c.acao?" acao":" prop"}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}${lp}" data-b3="${c.id}" data-sq="${i}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}${c.acao?"":`;--sky:${skyline(c.id)}`}"><div class="b3in">${floor}<span class="b3nm">${esc(c.nome)}${c.acao?"":`<small>${esc(c.pais)}</small>`}</span><span class="b3pr">$${c.preco.toLocaleString("pt-BR")}</span></div>${extra}${pw}</div>`;
   });
   h+=`<div class="b3center"><span class="b3sr a">SORTE<i>ou</i>REVÉS</span><span class="b3sr b">SORTE<i>ou</i>REVÉS</span><div class="b3logo"><img src="logo.webp" alt=""><b>MUNDO</b></div></div>`;
   $("#b3dBoard").innerHTML=h;
@@ -1947,17 +2176,20 @@ function b3cam(){
   const z=b3.fit*Math.pow(1.25,b3.zoom);
   $("#b3dCam").style.transform=`translateY(${-b3.pitch*0.5}px) scale(${z})`;
   $("#b3dBoard").style.transform=`rotateX(${b3.pitch}deg) rotateZ(${b3.yaw}deg)`;
+  const bill=`rotateZ(${-b3.yaw}deg) rotateX(${-b3.pitch}deg)`;
+  document.querySelectorAll("#b3dBoard .b3pw").forEach(el=>el.style.transform=el.dataset.off+" "+bill);
 }
 function openBoard3d(){
   b3.hl=cdFilter==="all"?null:cdFilter==="mine"?L.me:cdFilter;
   $("#b3d").hidden=false;$("#b3d").insertBefore($("#b3dStage"),document.querySelector(".b3dtools"));drawBoard3d();play("tap");
 }
-function closeBoard3d(){$("#b3d").hidden=true;$("#cdBoardHost").insertBefore($("#b3dStage"),$("#b3Expand"));if(!$("#cardsSheet").hidden){drawCards()}play("tap")}
+function closeBoard3d(){b3pickEnd(true);$("#b3d").hidden=true;$("#cdBoardHost").insertBefore($("#b3dStage"),$("#b3Expand"));if(!$("#cardsSheet").hidden){drawCards()}play("tap")}
 $("#b3Expand").onclick=openBoard3d;
 $("#b3dClose").onclick=closeBoard3d;
 $("#cdBoardHost").insertBefore($("#b3dStage"),$("#b3Expand"));
 $("#b3dLegend").addEventListener("click",e=>{const b=e.target.closest("[data-hl]");if(!b)return;b3.hl=b.dataset.hl||null;play("tap");drawBoard3d()});
 document.querySelector(".b3dtools").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(!b)return;const v=b.dataset.v;
+  if(v==="here"){if(b3.pick)b3pickEnd();else b3pickStart();play("tap");return}
   if(v==="top"){b3.pitch=1;b3.yaw=0}else if(v==="tilt"){b3.pitch=52;b3.yaw=-18}else if(v==="+")b3.zoom=Math.min(4,b3.zoom+1);else b3.zoom=Math.max(-1,b3.zoom-1);
   $("#b3dBoard").style.transition=$("#b3dCam").style.transition="transform .35s ease";b3cam();setTimeout(()=>{$("#b3dBoard").style.transition=$("#b3dCam").style.transition=""},360);play("tap")});
 const b3s=$("#b3dStage");
@@ -1973,6 +2205,7 @@ function b3still(){clearTimeout(b3MoveT);b3MoveT=setTimeout(()=>{if(!b3.ptrs.siz
 function b3up(e){b3still();
   const tap=b3.ptrs.size===1&&b3.moved<8&&Date.now()-b3.t0<400;
   b3.ptrs.delete(e.pointerId);b3.last=null;
+  if(tap&&b3.pick){const el=document.elementFromPoint(e.clientX,e.clientY);const q=el&&el.closest("[data-sq]");if(q){setMyPos(+q.dataset.sq,true);b3pickEnd();toast("Você está em "+sqName(+q.dataset.sq));play("tap")}return}
   if(tap){const el=document.elementFromPoint(e.clientX,e.clientY);const t=el&&el.closest("[data-b3]");if(t){play("tap");openCard(+t.dataset.b3);$("#cardSheet").classList.add("over3d")}}
 }
 b3s.addEventListener("pointerup",b3up);b3s.addEventListener("pointercancel",e=>{b3.ptrs.delete(e.pointerId);b3.last=null;b3still()});
@@ -1985,7 +2218,7 @@ else{
   if(saved&&saved.mesa&&API&&isStandalone())openMesa(last);else render();
 }
 window.addEventListener("hashchange",()=>{const h=(location.hash||"").replace("#","").toUpperCase();if(h.length===4&&API&&(!L||h!==L.codigo))openMesa(h)});
-window.PORTI_DEBUG={state:()=>L,sync:syncNow,sound:()=>({on:soundOn,ready:soundReady,state:ac&&ac.state})};
+window.PORTI_DEBUG={t:{openCard,closeCard,ccDo,offerDo,scoreDo,showFinal},state:()=>L,sync:syncNow,sound:()=>({on:soundOn,ready:soundReady,state:ac&&ac.state})};
 })();
 
 ;["status-ferias.svg","status-preso.svg"].forEach(u=>{const im=new Image();im.src=u});

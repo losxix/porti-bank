@@ -10,6 +10,11 @@ Banco digital para jogar Banco Imobiliário com os amigos. Cada jogador usa o pr
 - **Calculadora:** na tela de pagar/receber, dados × valor (ex.: 11 × $ 40.000).
 - **Quem chega no meio:** entra com o código; o banqueiro pode dar a média da mesa pelo Ajustar.
 - Extrato da mesa visível para todos, esconder saldo, sons de maquininha, QR code para chamar a mesa.
+- **Entrar pelo QR code:** na tela inicial, "Escanear o QR code da mesa" abre a câmera dentro do app e já entra na sala.
+- **Cartas do jogo:** as 28 cartas da edição Mundo com dono, casas e hipoteca. O banqueiro vende as livres; jogadores pedem para comprar e o banqueiro autoriza; donos vendem entre si por um preço combinado. Para construir, é preciso ter a cor inteira sem hipoteca.
+- **Tabuleiro 3D:** mostra quem é dono de cada casa (aura e foto), os prédios e onde cada jogador está.
+- **Dados:** role no app ou toque no número que saiu na mesa para ver onde vai parar, quanto paga de aluguel e se passou pela partida.
+- **Placar:** patrimônio de cada um (saldo + cartas + casas). O banqueiro encerra a partida e todos veem o pódio.
 
 Site: https://losxix.github.io/porti-bank/
 
@@ -23,10 +28,8 @@ Site: https://losxix.github.io/porti-bank/
    - a chave **anon public** (ou **publishable**).
 4. Abra o arquivo `config.js` e cole os dois valores no lugar de `COLE_AQUI...`. Essa chave foi feita para ficar no app: não é senha.
 
-### 2. Site (GitHub + Vercel)
-1. No GitHub, crie um repositório chamado `porti-bank` e envie todos os arquivos desta pasta (**Add file → Upload files**, arraste tudo, **Commit changes**).
-2. Na [Vercel](https://vercel.com), clique em **Add New → Project**, escolha o `porti-bank` e clique em **Deploy**. Não precisa mudar nenhuma configuração.
-3. Em um minuto o app fica em `https://porti-bank.vercel.app` (ou um nome parecido que a Vercel mostrar).
+### 2. Site (GitHub Pages)
+O site já está publicado em **https://losxix.github.io/porti-bank/** pelo GitHub Pages: cada mudança enviada para a branch `main` vai para o ar sozinha em um ou dois minutos. Depois de uma atualização, feche e abra o app no celular para pegar a versão nova.
 
 ### 3. Instalar nos celulares
 - **iPhone:** abra o link no **Safari** → botão **Compartilhar** → **Adicionar à Tela de Início**.
