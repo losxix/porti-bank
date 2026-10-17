@@ -149,6 +149,19 @@ const SFX={
     tone(90,2.75,.5,"sawtooth",.07,280);tone(180,2.75,.5,"square",.03,560);
     tone(330,3.2,1.5,"sawtooth",.08,60);noise(3.15,1.5,.13,"bandpass",900);noise(3.2,1.1,.05,"highpass",4000)
   },
+  /* vacation (own style): umbrella drops and pops open, sunglasses land, beach jingle */
+  vacay5(){
+    noise(.4,.35,.06,"bandpass",1400);tone(900,.4,.35,"sine",.04,300);
+    noise(.95,.08,.22,"bandpass",2200);tone(330,.95,.14,"triangle",.12,880);tone(660,1.0,.12,"triangle",.07,1320);
+    noise(1.0,.45,.05,"bandpass",1200);tone(1600,1.0,.45,"sine",.03,500);
+    tone(2637,1.45,.18,"triangle",.07);tone(3520,1.47,.22,"triangle",.05);noise(1.45,.04,.12,"highpass",5000);
+    [523,659,784,1047,784,1047].forEach((f,i)=>{const t=1.6+i*.11;tone(f,t,.22,"triangle",.11);tone(f*2,t,.12,"sine",.03)});
+  },
+  back5(){
+    noise(.35,.4,.07,"bandpass",1800);tone(400,.35,.4,"sine",.05,1400);
+    tone(880,.75,.3,"triangle",.08,330);noise(.75,.2,.1,"bandpass",1500);
+    [784,659,523,659,784].forEach((f,i)=>tone(f,1.35+i*.1,.2,"triangle",.11))
+  },
   /* quad bike (3.8s): rolls in .25-.95, bag lands 1.2, umbrella pops 1.55, revs 1.5-2.4, leaves 2.45-3.2 */
   vacay4(){
     tone(120,.25,.75,"sawtooth",.05,90);noise(.25,.75,.06,"lowpass",600);
@@ -170,7 +183,7 @@ const SFX={
   unlock(){noise(0,.03,.18);tone(2200,0,.05,"square",.06);noise(.12,.03,.18);tone(2600,.12,.05,"square",.06);tone(240,.3,.5,"sawtooth",.04,700);noise(.3,.45,.04);[523,659,784].forEach((f,i)=>tone(f,.85+i*.08,.2,"triangle",.11))}
 };
 let sfxBus=null,longBus=null;
-const LONG_SFX={vacay3d:1,back3d:1,vacay4:1,back4:1};
+const LONG_SFX={vacay3d:1,back3d:1,vacay4:1,back4:1,vacay5:1,back5:1};
 function stopSfx(){const b=longBus;longBus=null;const a=ac;if(!b||!a)return;try{b.gain.setTargetAtTime(0,a.currentTime,.05);setTimeout(()=>{try{b.disconnect()}catch(e){}},400)}catch(e){}}
 function play(k){
   if(soundOn)try{wakeSound();
@@ -696,12 +709,6 @@ let tripT;
 function tripShow(id,leaving){
   const now=Date.now(),k=id+(leaving?"v":"b");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
   const p=derive().P[id];if(!p)return;
-  if(window.PortiFerias){
-    const foto=p.foto&&/^data:image\//.test(p.foto)?p.foto:"";
-    play(leaving?"vacay4":"back4");
-    (leaving?PortiFerias.sair({nome:p.nome,foto}):PortiFerias.voltar({nome:p.nome,foto})).then(r=>{if(r&&r.reason!=="concluida")stopSfx()});
-    return;
-  }
   const el=$("#trip");
   $("#tripWho").innerHTML=avatar(p,"big");
   $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias!`:`<b>${esc(p.nome)}</b> voltou das férias!`;
@@ -709,8 +716,8 @@ function tripShow(id,leaving){
   el.className="trip "+(leaving?"leaving":"back");
   el.hidden=true;void el.offsetWidth;el.hidden=false;
   el.querySelectorAll("*").forEach(n=>{n.style.animation="none";void n.offsetWidth;n.style.animation=""});
-  play(leaving?"vacay":"back");
-  clearTimeout(tripT);tripT=setTimeout(()=>el.hidden=true,leaving?3100:2600);
+  play(leaving?"vacay5":"back5");
+  clearTimeout(tripT);tripT=setTimeout(()=>{el.hidden=true;stopSfx()},leaving?3300:2700);
 }
 function tripLater(id,leaving){setTimeout(()=>tripShow(id,leaving),30)}
 function cellLater(id,closing){setTimeout(()=>cellShow(id,closing),30)}
@@ -727,7 +734,7 @@ function cellShow(id,closing){
   clearTimeout(cellT);cellT=setTimeout(()=>el.hidden=true,closing?2900:2400);
 }
 $("#cell").addEventListener("click",()=>{$("#cell").hidden=true;clearTimeout(cellT)});
-$("#trip").addEventListener("click",()=>{$("#trip").hidden=true;clearTimeout(tripT)});
+$("#trip").addEventListener("click",()=>{$("#trip").hidden=true;clearTimeout(tripT);stopSfx()});
 const paysBank=r=>!!r.de&&!r.para&&r.motivo!=="Ajuste de saldo";
 
 /* ---------- actions ---------- */
@@ -913,7 +920,7 @@ $("#players").addEventListener("pointermove",e=>{
   sw.bg.style.top=sw.row.offsetTop+"px";sw.bg.style.height=sw.row.offsetHeight+"px";
   sw.bg.className="swbg "+kind+(Math.abs(sw.dx)>80?" go":"");
   const ic=(id,vb)=>`<svg class="sticon" viewBox="${vb}"><use href="#${id}"/></svg>`;
-  sw.bg.innerHTML="<b>"+(kind==="ferias"?ic("pb-car","0 0 72 48")+(undo?"Tirar das férias":"Férias"):ic(undo?"pb-unlock":"pb-lock","0 0 64 72")+(undo?"Soltar":"Prender"))+"</b>";
+  sw.bg.innerHTML="<b>"+(kind==="ferias"?'<img class="sticon" src="status-ferias.svg" alt="">'+(undo?"Tirar das férias":"Férias"):(undo?ic("pb-unlock","0 0 64 72"):'<img class="sticon" src="status-preso.svg" alt="">')+(undo?"Soltar":"Prender"))+"</b>";
   sw.row.classList.toggle("armed",Math.abs(sw.dx)>80);
 });
 function endSwipe(){

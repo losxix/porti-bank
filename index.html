@@ -648,9 +648,53 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 :root[data-theme="dark"] .ps-status,.ps-status{color:#24232b}
 .tfoot .btn.nfcgo{background:#252329;color:#FFD12B;border-color:#252329}
 .tfoot .btn.nfcgo:disabled{background:var(--soft);color:var(--muted)}
+
+/* vacation, own style (same frame as the jail cell) */
+.trip .trip-stage.vstage{width:min(78vw,320px);aspect-ratio:1/1.1;border-radius:22px;border:3px solid #000;box-shadow:0 0 0 3px #2b2d33,0 18px 40px #000a;overflow:hidden;position:relative;background:linear-gradient(#ff9f5a,#ffcf5c 46%,#ffe7a1 56%)}
+.vsun{position:absolute;left:50%;top:13%;width:46%;aspect-ratio:1;margin-left:-23%;border-radius:50%;background:radial-gradient(circle at 40% 38%,#fff6c9,#ffd12b 60%,#ffb21e);box-shadow:0 0 0 10px #ffe08a55,0 0 50px #fff2a8}
+.vsea{position:absolute;left:0;right:0;top:54%;height:14%;background:linear-gradient(#2fb7d6,#1d93b8);border-top:3px solid #252329}
+.vsea i{position:absolute;left:-10%;width:120%;height:4px;border-radius:4px;background:repeating-linear-gradient(90deg,#ffffffaa 0 22px,transparent 22px 44px)}
+.vsea i:nth-child(1){top:30%}.vsea i:nth-child(2){top:65%;opacity:.6}
+.vsand{position:absolute;left:0;right:0;bottom:0;height:34%;background:#f2d79b;border-top:3px solid #252329}
+.vsand::after{content:"";position:absolute;inset:0;background:radial-gradient(#d9b56b 1.2px,transparent 1.6px) 0 0/14px 14px;opacity:.7}
+.vsign{position:absolute;right:6%;top:5%;z-index:1;padding:6px 10px 7px;border:2px solid #17171d;border-radius:9px;background:#252329;color:#fff8e8;text-align:center;box-shadow:2px 3px 0 #17171d;transform:rotate(3deg);line-height:1}
+.vsign span{display:block;font-size:7px;letter-spacing:1.4px;color:#FFD12B;font-weight:800}
+.vsign b{display:block;font-family:var(--display);font-size:11px;margin-top:3px}
+.vumb{position:absolute;left:8%;top:9%;width:48%;z-index:2;transform-origin:45% 95%;filter:drop-shadow(2px 3px 0 #17171d55)}
+.vwho{position:absolute;left:50%;top:58%;z-index:3;transform:translate(-50%,-50%)}
+.vwho .avatar.big{width:132px!important;height:132px!important;min-width:132px!important;min-height:132px!important;max-width:132px!important;max-height:132px!important;flex:0 0 132px!important;font-size:58px!important;border:5px solid #FFD12B!important;box-shadow:0 0 0 3px #17171d,0 8px 0 #17171d!important}
+.vglass{position:absolute;left:50%;top:51%;width:42%;margin-left:-21%;z-index:4;filter:drop-shadow(0 3px 0 #0005)}
+.vspark{position:absolute;left:50%;top:51%;z-index:5;pointer-events:none}
+.vspark i{position:absolute;width:12px;height:12px;margin:-6px;background:#fff;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0}
+.vspark i:nth-child(1){left:-70px;top:-6px}.vspark i:nth-child(2){left:62px;top:-14px}.vspark i:nth-child(3){left:-40px;top:-30px}.vspark i:nth-child(4){left:48px;top:16px}
+/* leaving */
+.trip.leaving .vsun{animation:vSunUp .9s cubic-bezier(.2,.8,.3,1) both}
+@keyframes vSunUp{from{transform:translateY(60%);opacity:.3}to{transform:none;opacity:1}}
+.trip.leaving .vwho{animation:vPop .45s cubic-bezier(.2,1.6,.4,1) .1s both}
+@keyframes vPop{from{transform:translate(-50%,-50%) scale(.4);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.trip.leaving .vumb{animation:vUmbIn .7s cubic-bezier(.3,1.5,.5,1) .4s both,vUmbSway 1.6s ease-in-out 1.2s infinite alternate}
+@keyframes vUmbIn{0%{opacity:0;transform:translateY(-140%) scale(.25,.9) rotate(-25deg)}55%{opacity:1;transform:translateY(4%) scale(.3,1) rotate(-8deg)}78%{transform:scale(1.12,.95) rotate(-4deg)}100%{opacity:1;transform:scale(1) rotate(-6deg)}}
+@keyframes vUmbSway{from{transform:rotate(-6deg)}to{transform:rotate(-1deg)}}
+.trip.leaving .vglass{animation:vGlass .5s cubic-bezier(.5,0,.8,.4) .95s both,vGlassLand .3s ease-out 1.45s both}
+@keyframes vGlass{from{opacity:0;transform:translateY(-260px) rotate(-30deg)}to{opacity:1;transform:translateY(0) rotate(0)}}
+@keyframes vGlassLand{0%{transform:translateY(0) scaleY(.85)}50%{transform:translateY(-6px) rotate(-3deg)}100%{transform:none}}
+.trip.leaving .vspark i{animation:vSpark .6s ease-out 1.5s both}
+.vspark i:nth-child(2){animation-delay:1.58s!important}.vspark i:nth-child(3){animation-delay:1.66s!important}.vspark i:nth-child(4){animation-delay:1.74s!important}
+@keyframes vSpark{0%{opacity:0;transform:scale(.2) rotate(0)}40%{opacity:1;transform:scale(1.4) rotate(45deg)}100%{opacity:0;transform:scale(.6) rotate(90deg)}}
+.trip.leaving .trip-txt{animation:stamp .4s cubic-bezier(.2,1.8,.4,1) 1.55s both;background:#FFD12B}
+/* coming back */
+.trip.back .vglass{animation:vGlassOff .55s cubic-bezier(.4,0,.6,1) .35s both}
+@keyframes vGlassOff{0%{transform:none}30%{transform:translateY(8px)}100%{opacity:0;transform:translate(120px,-260px) rotate(60deg)}}
+.trip.back .vumb{animation:vUmbOut .7s cubic-bezier(.5,0,.7,.4) .7s both}
+@keyframes vUmbOut{0%{transform:rotate(-6deg)}40%{transform:scale(.3,1.05) rotate(-6deg)}100%{opacity:0;transform:translateY(-150%) scale(.25,.9) rotate(-20deg)}}
+.trip.back .vsun{animation:vSunDown 1.3s ease-in .4s both}
+@keyframes vSunDown{to{transform:translateY(55%);opacity:.5}}
+.trip.back .vwho{animation:vHop .4s ease 1.3s both}
+@keyframes vHop{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-50%,-58%)}}
+.trip.back .trip-txt{animation:stamp .4s cubic-bezier(.2,1.8,.4,1) 1.35s both;background:#7ee08a}
+@media (prefers-reduced-motion:reduce){.trip *{animation-duration:.01s!important;animation-delay:0s!important}}
 </style>
 <link rel="stylesheet" href="porti-status.css">
-<link rel="stylesheet" href="porti-ferias.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -823,7 +867,7 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
     <button class="pact" data-pa="set" type="button" id="plSet"><b>Ajustar saldo</b><span>Corrigir ou equilibrar quem entrou no meio</span></button>
   </div>
   <div id="plBoss"><h2>Situação no jogo</h2>
-    <div class="jailrow" id="shJail"><button class="btn ghost small" data-sit="preso" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-lock"/></svg>Cadeia</button><button class="btn ghost small" data-sit="ferias" type="button"><svg class="sticon" viewBox="0 0 72 48"><use href="#pb-car"/></svg>Férias</button><button class="btn ghost small" data-sit="" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-unlock"/></svg>Soltar</button></div>
+    <div class="jailrow" id="shJail"><button class="btn ghost small" data-sit="preso" type="button"><img class="sticon" src="status-preso.svg" alt="">Cadeia</button><button class="btn ghost small" data-sit="ferias" type="button"><img class="sticon" src="status-ferias.svg" alt="">Férias</button><button class="btn ghost small" data-sit="" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-unlock"/></svg>Soltar</button></div>
     <button class="btn ghost" id="shRemove" type="button" hidden>Remover da mesa</button>
   </div>
 </div>
@@ -848,10 +892,13 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
   <div class="claim" id="bankList"></div>
 </div>
 <div class="trip" id="trip" hidden aria-live="polite">
-  <div class="trip-stage">
-    <div class="world"><img class="scene" src="ferias-cenario.webp" alt="" draggable="false"><div class="sign"><span id="tripSignTop">DESTINO</span><strong>BARREIRINHAS</strong></div></div>
-    <div class="car"><img class="carimg" src="ferias-carro.webp" alt="" draggable="false"><div class="driver" id="tripWho"></div><div class="smoke"><i></i><i></i><i></i></div></div>
-    <div class="speed"><i></i><i></i><i></i><i></i></div>
+  <div class="trip-stage vstage">
+    <div class="vsun"></div><div class="vsea"><i></i><i></i></div><div class="vsand"></div>
+    <div class="vsign"><span id="tripSignTop">DESTINO</span><b>BARREIRINHAS</b></div>
+    <img class="vumb" src="status-ferias.svg" alt="" draggable="false">
+    <div class="vwho" id="tripWho"></div>
+    <svg class="vglass" viewBox="0 0 120 44" aria-hidden="true"><path d="M4 10h112" stroke="#17171d" stroke-width="6" stroke-linecap="round"/><path d="M8 10h44v8c0 12-8 20-22 20S8 30 8 18z" fill="#17171d" stroke="#17171d" stroke-width="4" stroke-linejoin="round"/><path d="M68 10h44v8c0 12-8 20-22 20S68 30 68 18z" fill="#17171d" stroke="#17171d" stroke-width="4" stroke-linejoin="round"/><path d="M16 17l9-4M76 17l9-4" stroke="#FFD12B" stroke-width="4" stroke-linecap="round"/><path d="M52 14q8-5 16 0" fill="none" stroke="#17171d" stroke-width="5"/></svg>
+    <div class="vspark"><i></i><i></i><i></i><i></i></div>
   </div>
   <p class="trip-txt" id="tripTxt"></p>
 </div>
@@ -870,8 +917,6 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="vendor/qrcode.js"></script>
-<script>window.PORTI_FERIAS_ASSETS={quadriciclo:"quadriciclo.webp"};</script>
-<script src="porti-ferias.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
