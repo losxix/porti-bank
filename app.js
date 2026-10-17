@@ -572,7 +572,7 @@ function render(){
     const f=$("#txFilter");
     f.innerHTML=`<div class="fchips">${KINDS.map(([k,l])=>`<button data-fk="${k}" aria-pressed="${TXF.kind===k}">${l}</button>`).join("")}</div>
       <div class="fchips who"><button data-fw="" aria-pressed="${!TXF.who}">Todos</button>${people.map(p=>`<button data-fw="${esc(p.id)}" aria-pressed="${TXF.who===p.id}">${avatar(p,"sm")}${esc(p.nome)}</button>`).join("")}</div>
-      ${whys.length>1||TXF.why?`<div class="fchips why"><button data-fy="" aria-pressed="${!TXF.why}">Qualquer motivo</button>${whys.map(w=>`<button data-fy="${esc(w)}" aria-pressed="${TXF.why===w}">${esc(w)}</button>`).join("")}</div>`:""}`;
+      ${whys.length>1||TXF.why?`<div class="fchips why"><button data-fy="" aria-pressed="${!TXF.why}">Qualquer motivo</button>${whys.map(w=>`<button class="rchip" data-fy="${esc(w)}" aria-pressed="${TXF.why===w}"${rStyle(w)}>${rIcon(w)}${esc(w)}</button>`).join("")}</div>`:""}`;
     const fl=base.filter(t=>!TXF.why||t.motivo===TXF.why);
     const live=fl.filter(t=>!t.estornado_em&&(t.status||"aprovado")==="aprovado");
     let sum="";
@@ -607,7 +607,7 @@ function render(){
     return `<div class="t ${cls}"><span class="ar">${t.para===L.me?"↓":t.de===L.me?"↑":"⇄"}</span>
       <div class="who">${esc(nameOf(t.de,D))} → ${esc(nameOf(t.para,D))}</div>
       <div class="amt">${sign}${money(t.valor)}</div>
-      <div class="meta"><span class="num">${time}</span>${t.motivo?`<span>${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join("");
+      <div class="meta"><span class="num">${time}</span>${t.motivo?`<span class="rtag"${rStyle(t.motivo)}>${rIcon(t.motivo)}${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join("");
 }
 $("#txFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
   if(b.dataset.fk!==undefined)TXF.kind=b.dataset.fk;else if(b.dataset.fw!==undefined)TXF.who=b.dataset.fw||null;else if(b.dataset.fy!==undefined)TXF.why=b.dataset.fy||null;else return;
@@ -927,6 +927,21 @@ $("#copyBtn").onclick=async()=>{
 
 /* ---------- payment sheet ---------- */
 let SH={kind:"pay",actor:null,to:null,note:""};
+/* each reason has its own color and symbol, the same everywhere (sheet, statement, filters) */
+const RMETA={
+  "Aluguel":{c:"#E0582F",d:"M4 11 12 4l8 7M6 9.5V20h12V9.5M10 20v-5h4v5"},
+  "Compra":{c:"#2F6FDB",d:"M6 8h12l-1 12H7L6 8Zm3 0V6.5a3 3 0 0 1 6 0V8"},
+  "Imposto":{c:"#7B4FD6",d:"M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3.5 11.5 5-5M10 9.5h.01M14 14.5h.01"},
+  "Construção":{c:"#D98200",d:"M3 20h18M5 20V12h6v8M11 20V8h8v12M14 11h2M14 14h2M7.5 15h1"},
+  "Sorte/Revés":{c:"#139E6B",d:"M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.8 6.2a2.3 2.3 0 1 1 3.2 2.1c-.7.3-1 .8-1 1.5M12 16.5h.01"},
+  "Venda ao banco":{c:"#0E8C9A",d:"M3 10 12 4l9 6M5 10v8M19 10v8M3 20h18M12 9v8m-3-3 3 3 3-3"},
+  "Hipoteca":{c:"#9A6532",d:"M7 3h7l4 4v14H7V3Zm7 0v4h4M10 17h5M10 13.5h5"},
+  "Prêmio":{c:"#C99A00",d:"M8 4h8v5a4 4 0 0 1-8 0V4Zm0 2H5a3 3 0 0 0 3 4m8-4h3a3 3 0 0 1-3 4M12 13v4m-4 3h8l-1-3H9l-1 3"},
+  "Passou pela partida":{c:"#C99A00",d:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 0v18M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"},
+  "Ajuste de saldo":{c:"#6E6A75",d:"M5 6h14M5 12h14M5 18h14M9 4v4M15 10v4M8 16v4"}
+};
+function rIcon(r){const m=RMETA[r];return m?`<svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg>`:""}
+function rStyle(r){const m=RMETA[r];return m?` style="--rc:${m.c}"`:""}
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
 function quickValues(){
   const s=L.mesa.saldo_inicial,p=L.mesa.salario;
@@ -974,7 +989,7 @@ function drawSheet(){
   $("#shMore").hidden=!shMore;$("#shMoreBtn").setAttribute("aria-expanded",String(shMore));
   $("#shReasonWrap").hidden=!(shWhy||SH.note)||!REASONS[SH.kind].length;
   $("#shReasonBtn").setAttribute("aria-expanded",String(!$("#shReasonWrap").hidden));
-  $("#shReasonBtn").textContent=SH.note?"Motivo: "+SH.note:"Adicionar motivo";
+  $("#shReasonBtn").innerHTML=SH.note?`<span class="rtag"${rStyle(SH.note)}>${rIcon(SH.note)}${esc(SH.note)}</span>`:"Adicionar motivo";
   $("#shHint").hidden=SH.kind!=="set"&&!(SH.kind==="recv"&&!boss);
   const q=$("#shQuick");
   if(SH.kind==="set"){
@@ -992,7 +1007,7 @@ function drawSheet(){
   const rc=$("#shTo"),sl=rc.scrollLeft;
   rc.innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button type="button" data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}" aria-label="${esc(x.nome)}"><span class="ring">${x.id==="bank"?bankAv:avatar(x)}</span><span class="nm">${esc(x.id==="bank"?"Banco":shortName(x.nome))}</span></button>`).join("");
   rc.scrollLeft=sl;
-  $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button type="button" data-note="${esc(r)}" aria-pressed="${SH.note===r}">${esc(r)}</button>`).join("");
+  $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button type="button" class="rchip" data-note="${esc(r)}" aria-pressed="${SH.note===r}"${rStyle(r)}>${rIcon(r)}${esc(r)}</button>`).join("");
   const amt=parseAmt($("#shAmount").value),has=$("#shAmount").value!=="";
   $("#shClear").hidden=!has;$("#shClear").parentElement.classList.toggle("empty",!has);
   const go=$("#shGo"),an=p.nome||"?",warn=$("#shWarn");

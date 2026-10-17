@@ -624,6 +624,16 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 .step.holding{background:color-mix(in oklab,var(--accent) 35%,var(--surface));transform:scale(.97)}
 .step.turbo{background:var(--accent);color:var(--accent-ink)}
 .amtsub.empty{min-height:8px;margin:0}
+/* reasons: own color + symbol */
+.ric{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tsheet .chips button.rchip,.fchips button.rchip{gap:7px;padding-left:9px;border-color:color-mix(in oklab,var(--rc) 45%,transparent);background:color-mix(in oklab,var(--rc) 10%,var(--surface));color:var(--ink)}
+.rchip .ric{color:var(--rc);width:20px;height:20px}
+.tsheet .chips button.rchip[aria-pressed="true"],.fchips button.rchip[aria-pressed="true"]{background:var(--rc);border-color:var(--rc);color:#fff}
+.rchip[aria-pressed="true"] .ric{color:#fff}
+.rtag{display:inline-flex;align-items:center;gap:4px;color:color-mix(in oklab,var(--rc,var(--muted)) 80%,var(--ink));font-weight:700}
+.rtag .ric{width:14px;height:14px;color:var(--rc)}
+.extra .rtag{font-size:13px;padding:3px 9px 3px 6px;border-radius:999px;background:color-mix(in oklab,var(--rc) 14%,transparent)}
+.extra .rtag .ric{width:16px;height:16px}
 </style>
 </head>
 <body>
