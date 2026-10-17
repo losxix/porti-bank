@@ -525,7 +525,7 @@ function render(){
   const max=Math.max(1,...vis.map(p=>bal[p.id]));
   if(sw&&sw.on){swDirty=true}else $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
-    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="jailtag">🔒 preso</span>':p.situacao==="ferias"?'<span class="vactag">🏖️ férias</span>':"");
+    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="jailtag"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-lock"/></svg>preso</span>':p.situacao==="ferias"?'<span class="vactag"><svg class="sticon" viewBox="0 0 72 48"><use href="#pb-car"/></svg>férias</span>':"");
     return `<button class="pl${p.situacao==="preso"?" jailed":p.situacao==="ferias"?" vac":""}" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
       <span class="nm">${avatar(p)}<span class="nmtxt">${esc(p.nome)}</span>${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
@@ -638,7 +638,7 @@ function tripShow(id,leaving){
   const p=derive().P[id];if(!p)return;
   const el=$("#trip");
   $("#tripWho").innerHTML=avatar(p,"big");
-  $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias! 🏖️`:`<b>${esc(p.nome)}</b> voltou das férias!`;
+  $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias!`:`<b>${esc(p.nome)}</b> voltou das férias!`;
   el.className="trip "+(leaving?"leaving":"back");
   el.hidden=true;void el.offsetWidth;el.hidden=false;
   el.querySelectorAll("*").forEach(n=>{n.style.animation="none";void n.offsetWidth;n.style.animation=""});
@@ -845,7 +845,8 @@ $("#players").addEventListener("pointermove",e=>{
   if(!sw.bg){sw.bg=document.createElement("div");$("#players").appendChild(sw.bg)}
   sw.bg.style.top=sw.row.offsetTop+"px";sw.bg.style.height=sw.row.offsetHeight+"px";
   sw.bg.className="swbg "+kind+(Math.abs(sw.dx)>80?" go":"");
-  sw.bg.innerHTML="<b>"+(kind==="ferias"?(undo?"↩️ Tirar das férias":"🏖️ Férias"):(undo?"🔓 Soltar":"🔒 Prender"))+"</b>";
+  const ic=(id,vb)=>`<svg class="sticon" viewBox="${vb}"><use href="#${id}"/></svg>`;
+  sw.bg.innerHTML="<b>"+(kind==="ferias"?ic("pb-car","0 0 72 48")+(undo?"Tirar das férias":"Férias"):ic(undo?"pb-unlock":"pb-lock","0 0 64 72")+(undo?"Soltar":"Prender"))+"</b>";
   sw.row.classList.toggle("armed",Math.abs(sw.dx)>80);
 });
 function endSwipe(){
@@ -1091,7 +1092,7 @@ function bumpIn(p){
   if(!L||!p||!p.id||p.id===L.me||(p.mesa&&p.mesa!==L.codigo))return;
   const now=Date.now();
   recentPeers=recentPeers.filter(x=>now-x.got<BUMP_LATE);recentPeers.push({id:p.id,role:p.role,got:now,t:+p.t||0});
-  if(p.role==="pay"&&sameKnock(recentPeers[recentPeers.length-1])&&!bumpMode){play("ask");toast(nameOf(p.id)+" encostou para te pagar 💸")}
+  if(p.role==="pay"&&sameKnock(recentPeers[recentPeers.length-1])&&!bumpMode){play("ask");toast(nameOf(p.id)+" encostou para te pagar")}
   if(bumpMode)bumpTry();
 }
 let bumpDecideT=null;
