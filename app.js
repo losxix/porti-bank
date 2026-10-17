@@ -61,8 +61,10 @@ function makeApi(){
         if(r.data.length<1000)return out;
       }
     },
+    async titulos(code){const r=await sb.from("pb_titulos").select("*").eq("mesa",code);if(r.error)throw fail(r.error,r.status);return r.data},
     subscribe(code,onRow,onStatus){
       const ch=sb.channel("mesa-"+code)
+        .on("postgres_changes",{event:"*",schema:"public",table:"pb_titulos",filter:"mesa=eq."+code},p=>p.new&&onRow("tit",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_lancamentos",filter:"mesa=eq."+code},p=>p.new&&onRow("lanc",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_jogadores",filter:"mesa=eq."+code},p=>p.new&&onRow("jog",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_mesas",filter:"codigo=eq."+code},p=>p.new&&onRow("mesa",p.new))
@@ -211,7 +213,7 @@ $("#sndBtn").onclick=()=>{
    jog/lanc hold rows confirmed by the server; out holds what this phone still has to send. */
 let L=null,net="idle",live=false,unsub=null,timer=null,firstSync=false,forceJoin=false;
 let peek=ls.get("pb-mask")==="1";
-const blank=code=>({v:1,codigo:code,mesa:null,jog:{},lanc:{},out:[],me:null,since:0});
+const blank=code=>({v:1,codigo:code,mesa:null,jog:{},lanc:{},tit:{},out:[],me:null,since:0});
 function loadMesa(code){try{const d=JSON.parse(ls.get("pb-mesa-"+code)||"null");if(d&&d.v===1)return d}catch(e){}return null}
 function save(){if(L)ls.set("pb-mesa-"+L.codigo,JSON.stringify(L))}
 
@@ -228,10 +230,12 @@ const needsApproval=(de,para,por)=>!de&&!!para&&!!banker()&&por!==banker();
 
 /* merged view: server rows + what is still waiting in the queue */
 function derive(){
-  const P={},T={};
+  const P={},T={},Tit={};
   for(const[id,p]of Object.entries(L.jog))P[id]={...p};
   for(const[id,t]of Object.entries(L.lanc))T[id]={...t};
+  for(const[id,t]of Object.entries(L.tit||(L.tit={})))Tit[id]={...t};
   for(const op of L.out){
+    if(op.t==="titulo"){applyTit(Tit,T,op);continue}
     if(op.t==="entrar"&&!P[op.id])P[op.id]={id:op.id,nome:op.nome,cor:op.cor,oculto:false,criado_em:op.em,pend:true};
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
     else if(op.t==="remover"&&P[op.id])P[op.id].removido=true;
@@ -244,7 +248,7 @@ function derive(){
     }
     else if((op.t==="aprovar"||op.t==="recusar")&&T[op.id]&&T[op.id].status==="pendente"){T[op.id].status=op.t==="aprovar"?"aprovado":"recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
   }
-  return{P,T};
+  return{P,T,Tit};
 }
 const counts=t=>!t.estornado_em&&(t.status||"aprovado")==="aprovado";
 function balances(D){
@@ -262,9 +266,77 @@ function tableAverage(D,exceptId){
   return Math.round(ids.reduce((s,id)=>s+b[id],0)/ids.length/1000)*1000;
 }
 
+/* ---------- cartas: Títulos de Posse do Banco Imobiliário Mundo ----------
+   id = número no verso da carta. al = aluguel sem casa, 1..4 casas, condomínio. */
+const GRUPOS=[
+  {k:"verde",n:"Verde",c:"#3DAA4A",ids:[7,8,1]},
+  {k:"laranja",n:"Laranja",c:"#E8641E",ids:[9,10,11]},
+  {k:"azul",n:"Azul",c:"#2B8FDB",ids:[23,24,17]},
+  {k:"rosa",n:"Rosa",c:"#C63FB8",ids:[18,19]},
+  {k:"roxo",n:"Roxo",c:"#6E3CA8",ids:[13,20]},
+  {k:"vinho",n:"Vinho",c:"#A11D33",ids:[4,3,2]},
+  {k:"verdeesc",n:"Verde-escuro",c:"#2E8466",ids:[14,15,16]},
+  {k:"amarelo",n:"Amarelo",c:"#E99B0C",ids:[12,5,6]},
+  {k:"acao",n:"Ações",c:"#2A2A33",ids:[27,21,22,25,28,26]}
+];
+const CARDS={};
+[[1,"Cidade do Cabo","África do Sul",60000,[2000,10000,30000,90000,160000,250000],50000,50000],
+ [2,"Londres","Inglaterra",240000,[20000,100000,300000,750000,925000,1100000],150000,120000],
+ [3,"Berlim","Alemanha",220000,[18000,90000,250000,700000,875000,1050000],150000,110000],
+ [4,"Paris","França",220000,[18000,90000,250000,700000,875000,1050000],150000,110000],
+ [5,"Ottawa","Canadá",260000,[22000,110000,330000,800000,975000,1150000],150000,150000],
+ [6,"Washington","EUA",260000,[22000,110000,330000,800000,975000,1150000],150000,150000],
+ [7,"Cairo","Egito",100000,[6000,30000,90000,270000,400000,500000],50000,50000],
+ [8,"Luanda","Angola",75000,[4000,20000,60000,180000,320000,450000],50000,50000],
+ [9,"Doha","Catar",320000,[28000,150000,450000,1000000,1200000,1400000],200000,160000],
+ [10,"Riade","Arábia Saudita",300000,[26000,130000,390000,900000,1100000,1275000],200000,150000],
+ [11,"Abu Dhabi","Emirados Árabes",300000,[26000,130000,390000,900000,1100000,1275000],200000,150000],
+ [12,"Cidade do México","México",280000,[26000,130000,360000,850000,1125000,1200000],150000,140000],
+ [13,"Cidade da Guatemala","Guatemala",100000,[6000,30000,90000,270000,400000,500000],50000,50000],
+ [14,"Seul","Coreia do Sul",140000,[10000,50000,150000,450000,625000,750000],100000,70000],
+ [15,"Pequim","China",160000,[12000,60000,180000,500000,700000,900000],100000,80000],
+ [16,"Tóquio","Japão",140000,[10000,50000,150000,450000,625000,750000],100000,70000],
+ [17,"Buenos Aires","Argentina",180000,[14000,70000,200000,550000,750000,950000],100000,100000],
+ [18,"Camberra","Austrália",400000,[50000,200000,600000,1400000,1700000,2000000],200000,175000],
+ [19,"Wellington","Nova Zelândia",350000,[35000,175000,500000,1100000,1300000,1500000],200000,200000],
+ [20,"São José","Costa Rica",120000,[8000,40000,100000,300000,450000,600000],50000,60000],
+ [23,"Santiago","Chile",200000,[16000,80000,220000,600000,800000,1000000],100000,100000],
+ [24,"Montevidéu","Uruguai",180000,[14000,70000,200000,550000,750000,950000],100000,100000]
+].forEach(([id,nome,pais,preco,al,casa,hip])=>{CARDS[id]={id,nome,pais,preco,al,casa,hip}});
+[[21,"OMC","Org. Mundial do Comércio",200000,50000,100000],[22,"ONU","Nações Unidas",200000,50000,100000],
+ [25,"OIT","Org. Internacional do Trabalho",200000,50000,100000],[26,"OTAN","Aliança do Atlântico Norte",200000,50000,100000],
+ [27,"IPCC","Painel do Clima",150000,40000,75000],[28,"OMS","Org. Mundial da Saúde",150000,40000,75000]
+].forEach(([id,nome,pais,preco,mult,hip])=>{CARDS[id]={id,nome,pais,preco,mult,casa:0,hip,acao:true}});
+GRUPOS.forEach(g=>g.ids.forEach(id=>{CARDS[id].g=g.k;CARDS[id].cor=g.c}));
+const blankTit=c=>({carta:c,dono:null,casas:0,hipotecada:false,oferta:null});
+/* the same rules the server applies, so the phone shows the result right away */
+function applyTit(Tit,T,op,boss){
+  const c=CARDS[op.carta];if(!c)return;
+  const t=Tit[op.carta]=Object.assign(blankTit(op.carta),Tit[op.carta]);
+  const money=(de,para,valor,motivo)=>{if(T&&!T[op.id])T[op.id]={id:op.id,mesa:L.codigo,de,para,valor,motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:"aprovado",pend:true}};
+  if(op.acao==="ofertar"){if(!t.dono)t.oferta=op.para}
+  else if(op.acao==="recusar")t.oferta=null;
+  else if(op.acao==="comprar"){if(t.dono)return;const d=op.para||op.por;t.dono=d;t.oferta=null;t.casas=0;t.hipotecada=false;money(d,null,c.preco,("Compra: "+c.nome).slice(0,40))}
+  else if(op.acao==="construir"){if(!t.dono||c.acao||t.hipotecada||t.casas>=5)return;money(t.dono,null,c.casa,((t.casas===4?"Condomínio: ":"Construção: ")+c.nome).slice(0,40));t.casas++}
+  else if(op.acao==="hipotecar"){if(!t.dono||t.hipotecada)return;t.hipotecada=true;money(null,t.dono,c.hip,("Hipoteca: "+c.nome).slice(0,40))}
+  else if(op.acao==="resgatar"){if(!t.dono||!t.hipotecada)return;t.hipotecada=false;money(t.dono,null,c.hip,("Fim da hipoteca: "+c.nome).slice(0,40))}
+  else if(op.acao==="tirar_casa")t.casas=Math.max(0,t.casas-1);
+  else if(op.acao==="devolver"){t.dono=null;t.oferta=null;t.casas=0;t.hipotecada=false}
+}
+function titOp(carta,acao,para){
+  if(!L||!L.me)return;
+  enqueue({t:"titulo",id:uuid(),carta,acao,para:para||null,por:L.me,em:nowIso()});
+}
+function rentOf(c,t,dice){
+  if(!t||!t.dono||t.hipotecada)return 0;
+  if(c.acao)return (dice||0)*c.mult;
+  return c.al[t.casas||0];
+}
+
 /* ---------- sync engine ---------- */
 function enqueue(op){L.out.push(op);save();render();setTimeout(syncNow,0)}
 function confirmOp(op){
+  if(op.t==="titulo"){applyTit(L.tit||(L.tit={}),L.lanc,op);if(L.lanc[op.id])delete L.lanc[op.id].pend;return}
   if(op.t==="entrar"&&!L.jog[op.id]){L.jog[op.id]={id:op.id,mesa:L.codigo,nome:op.nome,cor:op.cor,oculto:false,oculto_em:EPOCH,criado_em:op.em};if(L.mesa&&!L.mesa.banqueiro)L.mesa.banqueiro=op.id}
   else if(op.t==="lancar"&&!L.lanc[op.id])L.lanc[op.id]={id:op.id,mesa:L.codigo,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo||null,lancado_por:op.por,feito_em:op.em,estornado_em:null,estornado_por:null,status:op.status||"aprovado"};
   else if(op.t==="estornar"&&L.lanc[op.id]&&!L.lanc[op.id].estornado_em){
@@ -292,6 +364,7 @@ function sendOp(op){
   if(op.t==="foto")return API.rpc("pb_foto",{p_id:op.id,p_foto:op.foto});
   if(op.t==="remover")return API.rpc("pb_remover_jogador",{p_id:op.id,p_por:op.por});
   if(op.t==="esconder")return API.rpc("pb_mesa_esconder",{p_mesa:L.codigo,p_por:op.por,p_permitido:op.permitido});
+  if(op.t==="titulo")return API.rpc("pb_titulo",{p_id:op.id,p_mesa:L.codigo,p_carta:op.carta,p_acao:op.acao,p_por:op.por,p_para:op.para||null});
   if(op.t==="valores")return API.rpc("pb_mesa_valores",{p_mesa:L.codigo,p_por:op.por,p_saldo_inicial:op.saldo,p_salario:op.salario});
   return Promise.resolve();
 }
@@ -301,6 +374,7 @@ async function flush(cur){
     const op=cur.out[0];
     try{await sendOp(op)}
     catch(e){
+      if(e.config&&op.t==="titulo"&&L===cur){cur.out.shift();save();toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");play("err");continue}
       if(e.network||e.config)throw e;
       if(L!==cur)return sent;
       cur.out.shift();save();
@@ -394,6 +468,16 @@ function announce(news){
   }
 }
 let syncing=false,again=false;
+let titOff=false;
+function mergeTit(rows,notify){
+  if(!L)return;L.tit=L.tit||{};
+  for(const r of rows||[]){
+    if(!r||(r.mesa&&r.mesa!==L.codigo)||!CARDS[r.carta])continue;
+    const was=L.tit[r.carta]||blankTit(r.carta);
+    L.tit[r.carta]={carta:r.carta,dono:r.dono||null,casas:r.casas||0,hipotecada:!!r.hipotecada,oferta:r.oferta||null};
+    if(notify&&r.oferta===L.me&&was.oferta!==L.me){play("ask");if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
+  }
+}
 async function syncNow(){
   if(!L||!API)return;
   if(syncing){again=true;return}
@@ -407,6 +491,7 @@ async function syncNow(){
     mergeMesa(m);
     const js=await API.jogadores(cur.codigo);if(L!==cur)return;mergeRows("jog",js,firstSync);
     const ts=await API.lancamentos(cur.codigo,cur.since?cur.since-5000:0);if(L!==cur)return;mergeRows("lanc",ts,firstSync);
+    if(API.titulos&&!titOff){try{const tt=await API.titulos(cur.codigo);if(L!==cur)return;mergeTit(tt,firstSync)}catch(e){if(e.config)titOff=true;else throw e}}
     firstSync=true;save();
     const wasOff=net==="offline";
     setNet("online");
@@ -439,14 +524,14 @@ async function openMesa(code){
   code=String(code).toUpperCase();
   if(unsub){unsub();unsub=null}
   clearTimeout(timer);
-  L=loadMesa(code)||blank(code);
+  L=loadMesa(code)||blank(code);L.tit=L.tit||{};titOff=false;
   firstSync=!!L.since;forceJoin=false;live=false;net="idle";
   ls.set("pb-ultima",code);setHash(code);
   render();
   if(!API)return;
   if(API.subscribe){
     const cur=L;
-    unsub=API.subscribe(code,(kind,row)=>{if(L===cur){mergeRows(kind,[row],firstSync);save();render()}},
+    unsub=API.subscribe(code,(kind,row)=>{if(L===cur){if(kind==="tit"){titOff=false;mergeTit([row],firstSync)}else mergeRows(kind,[row],firstSync);save();render()}},
       st=>{if(L!==cur)return;const was=live;live=st==="SUBSCRIBED";if(live&&!was)syncNow();schedule()});
   }
   bumpOpen(code);
@@ -505,6 +590,10 @@ function render(){
   show("vMain");keepAwake();
   if(!$("#sheet").hidden&&D.P[SH.actor])drawSheet();
   if(!$("#plSheet").hidden&&D.P[SH.actor])drawPlayer();
+  if(!$("#cardsSheet").hidden&&!cdDrag)drawCards();
+  if(!$("#cardSheet").hidden)drawCard();
+  drawOffer(D);
+  {const mine=Object.values(D.Tit).filter(t=>t.dono===L.me).length;$("#cardsSub").textContent=mine?`Você tem ${mine} ${mine===1?"carta":"cartas"} · propriedades, casas e hipotecas`:"Propriedades, casas e hipotecas"}
   const boss=iAmBanker(),bk=banker();
   const bal=balances(D),c=colorOf(meP.cor),card=$("#card");
   card.style.backgroundColor=c.c;
@@ -969,8 +1058,9 @@ const RMETA={
   "Passou pela partida":{c:"#FFE79B",d:"M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"},
   "Ajuste de saldo":{c:"#D9D3C7",d:"M5 6h14M5 12h14M5 18h14M9 4v4M15 10v4M8 16v4"}
 };
-function rIcon(r){if(r==="Passou pela partida")return `<span class="rbadge" style="--rc:#FFD12B"><svg class="ric go" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-orbit"/></svg></span>`;const m=RMETA[r];return m?`<span class="rbadge"><svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg></span>`:""}
-function rStyle(r){const m=RMETA[r];return m?` style="--rc:${m.c}"`:""}
+function rKey(r){r=String(r||"");const k=r.split(":")[0].trim();return k==="Condomínio"?"Construção":k==="Fim da hipoteca"?"Hipoteca":k}
+function rIcon(r){r=rKey(r);if(r==="Passou pela partida")return `<span class="rbadge" style="--rc:#FFD12B"><svg class="ric go" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-orbit"/></svg></span>`;const m=RMETA[r];return m?`<span class="rbadge"><svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg></span>`:""}
+function rStyle(r){const m=RMETA[rKey(r)];return m?` style="--rc:${m.c}"`:""}
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
 function quickValues(){
   const s=L.mesa.saldo_inicial,p=L.mesa.salario;
@@ -1001,7 +1091,7 @@ function openSheet(kind,actor,nfc){
 let shMore=false,shWhy=false;
 function sheetOn(){document.body.classList.toggle("sheeton",!!document.querySelector(".sheet:not([hidden])"))}
 new MutationObserver(sheetOn).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
-function closeSheets(){$("#scrim").hidden=true;["#sheet","#plSheet","#invSheet","#bankSheet","#valSheet"].forEach(s=>$(s).hidden=true);try{document.activeElement&&document.activeElement.blur()}catch(e){}}
+function closeSheets(){$("#scrim").hidden=true;["#sheet","#plSheet","#cardsSheet","#cardSheet","#invSheet","#bankSheet","#valSheet"].forEach(s=>$(s).hidden=true);try{document.activeElement&&document.activeElement.blur()}catch(e){}}
 function shortName(n){n=String(n||"").trim();const f=n.split(/\s+/)[0];return f.length>9?f.slice(0,8)+"…":f}
 function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
@@ -1115,6 +1205,7 @@ function drawPlayer(){
 $("#plClose").onclick=closeSheets;
 $("#plActs").addEventListener("click",e=>{const b=e.target.closest("[data-pa]");if(!b)return;const a=SH.actor,k=b.dataset.pa;play("tap");
   if(k==="salary"){closeSheets();doSalary(a);return}
+  if(k==="cards"){openCards(a);return}
   openSheet(k,a)});
 /* keep the sheet above the on-screen keyboard (iPhone shrinks only the visual viewport) */
 function kbFit(){
@@ -1326,6 +1417,197 @@ $("#bumpList").onclick=()=>{const P=bumpPay;bumpPay=null;bumpClose();openSheet("
 document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()},{passive:true});
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
 window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
+/* ================= CARTAS (UI) ================= */
+var cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null;
+function cardOwnerHTML(t,D){
+  if(t.dono){const p=D.P[t.dono];return `<span class="mown">${p?avatar(p):""}<b>${esc(p?p.nome:"?")}</b></span>`}
+  if(t.oferta){const p=D.P[t.oferta];return `<span class="mown offer">Oferecida a ${esc(p?shortName(p.nome):"?")}</span>`}
+  return `<span class="mown free">Livre no banco</span>`;
+}
+function housesHTML(c,t){
+  if(c.acao)return `<span class="mhouses"><span style="font-size:11px;font-weight:700;color:var(--muted)">Dados × ${short(c.mult)}</span></span>`;
+  if(t.casas>=5)return `<span class="mhouses"><span class="condo">CONDOMÍNIO</span></span>`;
+  return `<span class="mhouses">${[1,2,3,4].map(i=>`<i class="${t.casas>=i?"on":""}"></i>`).join("")}</span>`;
+}
+function miniCard(c,t,D){
+  return `<button type="button" class="mcard${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}" data-card="${c.id}" style="--gc:${c.cor}"><span class="mband">${esc(c.nome)}<small>${esc(c.pais)}</small></span><span class="mbody"><span class="mprice">${money(c.preco)}</span>${cardOwnerHTML(t,D)}${housesHTML(c,t)}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
+}
+function openCards(filter){
+  closeSheets();cdFilter=filter||"all";
+  $("#scrim").hidden=false;$("#cardsSheet").hidden=false;$("#cdBody").scrollTop=0;drawCards();
+  if(titOff)toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");
+}
+function drawCards(){
+  const D=derive(),boss=iAmBanker(),people=playersArr(D);
+  const Tit=id=>D.Tit[id]||blankTit(id);
+  const count=id=>Object.values(D.Tit).filter(t=>t.dono===id).length;
+  const free=Object.keys(CARDS).filter(id=>!Tit(+id).dono).length;
+  $("#cdSub").textContent=`${free} livres no banco · ${28-free} com jogadores`;
+  $("#cdDrop").hidden=!boss;
+  if(boss)$("#cdPpl").innerHTML=people.map(p=>`<div class="cdp" data-drop="${esc(p.id)}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} cartas</span></div>`).join("");
+  if(cdFilter!=="all"&&cdFilter!=="free"&&cdFilter!=="mine"&&!D.P[cdFilter])cdFilter="all";
+  const chips=[["all","Todas"],["free","Livres"],["mine","Minhas"]].map(([k,l])=>`<button type="button" data-cf="${k}" aria-pressed="${cdFilter===k}">${l}</button>`).join("")
+    +people.filter(p=>p.id!==L.me).map(p=>`<button type="button" data-cf="${esc(p.id)}" aria-pressed="${cdFilter===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("");
+  $("#cdFilter").innerHTML=chips;
+  const ok=t=>cdFilter==="all"||(cdFilter==="free"&&!t.dono)||(cdFilter==="mine"&&t.dono===L.me)||t.dono===cdFilter;
+  const html=GRUPOS.map(g=>{
+    const cs=g.ids.filter(id=>ok(Tit(id)));if(!cs.length)return"";
+    return `<div class="cdgroup" style="--gc:${g.c}"><h3><i></i>${g.n}</h3><div class="cdgrid">${cs.map(id=>miniCard(CARDS[id],Tit(id),D)).join("")}</div></div>`;
+  }).join("");
+  $("#cdGroups").innerHTML=html||'<p class="empty">Nenhuma carta aqui.</p>';
+}
+$("#aCards").onclick=()=>{play("tap");openCards("all")};
+$("#cdClose").onclick=closeSheets;
+$("#cdFilter").addEventListener("click",e=>{const b=e.target.closest("[data-cf]");if(!b)return;cdFilter=b.dataset.cf;play("tap");drawCards()});
+$("#cdGroups").addEventListener("click",e=>{const b=e.target.closest("[data-card]");if(!b||cdDragJust)return;play("tap");openCard(+b.dataset.card)});
+
+/* banker: hold a free card and drag it onto a player */
+var cdHold=null,cdDragJust=false;
+function cdEnd(drop){
+  clearTimeout(cdHold);cdHold=null;
+  if(!cdDrag)return;
+  const d=cdDrag;cdDrag=null;
+  document.body.classList.remove("cdragging");$("#cardGhost").hidden=true;$("#cardGhost").innerHTML="";
+  if(d.el)d.el.classList.remove("lifting");
+  document.querySelectorAll(".cdp.over").forEach(x=>x.classList.remove("over"));
+  cdDragJust=true;setTimeout(()=>cdDragJust=false,350);
+  if(drop){
+    const c=CARDS[d.card],D=derive(),p=D.P[drop];if(!p)return;
+    titOp(d.card,"ofertar",drop);play("pay");
+    toast(`${c.nome} oferecida a ${p.nome}. Esperando confirmar.`);
+  }
+  drawCards();
+}
+$("#cdGroups").addEventListener("pointerdown",e=>{
+  const el=e.target.closest("[data-card]");if(!el||!iAmBanker())return;
+  const id=+el.dataset.card,t=derive().Tit[id];if(t&&t.dono)return;
+  const x0=e.clientX,y0=e.clientY;
+  clearTimeout(cdHold);
+  cdHold=setTimeout(()=>{
+    const g=$("#cardGhost");g.innerHTML=el.outerHTML;
+    cdDrag={card:id,el,x0,y0};el.classList.add("lifting");document.body.classList.add("cdragging");g.style.left=x0+"px";g.style.top=y0+"px";g.hidden=false;
+    play("tap");try{navigator.vibrate&&navigator.vibrate(25)}catch(err){}
+  },260);
+  const mv=ev=>{if(!cdDrag&&Math.hypot(ev.clientX-x0,ev.clientY-y0)>9){clearTimeout(cdHold);cdHold=null}};
+  el.addEventListener("pointermove",mv,{passive:true});
+  el.addEventListener("pointerup",()=>el.removeEventListener("pointermove",mv),{once:true});
+});
+document.addEventListener("pointermove",e=>{
+  if(!cdDrag)return;
+  const g=$("#cardGhost");g.style.left=e.clientX+"px";g.style.top=e.clientY+"px";
+  const over=document.elementFromPoint(e.clientX,e.clientY);const tgt=over&&over.closest("[data-drop]");
+  document.querySelectorAll(".cdp.over").forEach(x=>{if(x!==tgt)x.classList.remove("over")});
+  if(tgt&&!tgt.classList.contains("over")){tgt.classList.add("over");play("tap")}
+});
+document.addEventListener("pointerup",e=>{
+  if(cdHold&&!cdDrag){clearTimeout(cdHold);cdHold=null;return}
+  if(!cdDrag)return;
+  const over=document.elementFromPoint(e.clientX,e.clientY);const tgt=over&&over.closest("[data-drop]");
+  cdEnd(tgt&&tgt.dataset.drop);
+});
+document.addEventListener("pointercancel",()=>{if(cdDrag)cdEnd(null);else{clearTimeout(cdHold);cdHold=null}});
+document.addEventListener("touchmove",e=>{if(cdDrag)e.preventDefault()},{passive:false});
+document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest(".mcard"))e.preventDefault()});
+
+/* one card in detail */
+function openCard(id){
+  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;
+  $("#cardSheet").hidden=false;$("#scrim").hidden=false;$("#ccBody").scrollTop=0;drawCard();
+}
+function closeCard(){$("#cardSheet").hidden=true;if($("#cardsSheet").hidden)$("#scrim").hidden=true}
+$("#ccClose").onclick=closeCard;
+function drawCard(){
+  const c=CARDS[cdCard];if(!c)return;
+  const D=derive(),t=D.Tit[c.id]||blankTit(c.id),boss=iAmBanker(),me=L.me,owner=t.dono&&D.P[t.dono],mine=t.dono===me;
+  $("#cardSheet").style.setProperty("--gc",c.acao?"#2A2A33":c.cor);
+  $("#ccName").textContent=c.nome;$("#ccCountry").textContent=c.pais;
+  let h="";
+  /* who has it */
+  if(owner)h+=`<div class="ccown">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""}<small>${t.hipotecada?"Hipotecada · não cobra aluguel":c.acao?"Dono da ação":t.casas>=5?"Com condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:"Sem casas"}</small></div></div>`;
+  else if(t.oferta){const p=D.P[t.oferta];h+=`<div class="ccown">${p?avatar(p):""}<div>Oferecida a ${esc(p?p.nome:"?")}<small>Esperando confirmar a compra de ${money(c.preco)}</small></div></div>`}
+  else h+=`<div class="ccown"><div>Livre no banco<small>Preço ${money(c.preco)}</small></div></div>`;
+  /* values */
+  if(c.acao){
+    h+=`<div class="rtable"><div class="sep"><span>Preço</span><span>${money(c.preco)}</span></div><div class="${owner&&!t.hipotecada?"now":""}"><span>Soma dos dados ×</span><span>${money(c.mult)}</span></div><div class="sep"><span>Hipoteca</span><span>${money(c.hip)}</span></div></div>`;
+  }else{
+    const lb=["Aluguel","1 casa","2 casas","3 casas","4 casas","Condomínio"];
+    h+=`<div class="rtable"><div class="sep"><span>Preço</span><span>${money(c.preco)}</span></div>${c.al.map((v,i)=>`<div class="${owner&&!t.hipotecada&&(t.casas||0)===i?"now":""}"><span>${lb[i]}</span><span>${money(v)}</span></div>`).join("")}<div class="sep"><span>Casa / condomínio</span><span>${money(c.casa)}</span></div><div class="sep"><span>Hipoteca</span><span>${money(c.hip)}</span></div></div>`;
+  }
+  /* actions */
+  let a="";
+  if(!t.dono){
+    if(t.oferta===me)a+=`<button class="btn wide" data-cc="comprar">Comprar por ${money(c.preco)}</button><button class="btn ghost wide" data-cc="recusar">Não quero</button>`;
+    if(boss&&t.oferta)a+=`<button class="btn ghost wide" data-cc="recusar">Cancelar a oferta</button>`;
+    if(boss){
+      const ppl=playersArr(D);
+      h+=`<div class="ccsec"><h2>${t.oferta?"Oferecer para outra pessoa":"Vender para"}</h2><div class="fchips">${ppl.map(p=>`<button type="button" data-offer="${esc(p.id)}" aria-pressed="${t.oferta===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div><p class="ccnote">A pessoa confirma a compra no celular dela. Na lista de cartas, você também pode segurar a carta e arrastar até a pessoa.</p></div>`;
+    }
+  }else if(mine||boss){
+    if(!c.acao&&!t.hipotecada&&t.casas<5)a+=`<button class="btn" data-cc="construir">${t.casas===4?"Construir condomínio":`Construir ${t.casas+1}ª casa`}<small>Paga ${money(c.casa)}</small></button>`;
+    if(!t.hipotecada)a+=`<button class="btn ghost" data-cc="hipotecar">Hipotecar<small>Recebe ${money(c.hip)}</small></button>`;
+    else a+=`<button class="btn ghost" data-cc="resgatar">Pagar hipoteca<small>Paga ${money(c.hip)}</small></button>`;
+    if(boss&&t.casas>0)a+=`<button class="btn ghost" data-cc="tirar_casa">Tirar 1 ${t.casas>=5?"(condomínio)":"casa"}<small>Sem mexer no dinheiro</small></button>`;
+    if(boss)a+=`<button class="btn ghost" data-cc="devolver">${ccArm==="devolver"?"Toque de novo para devolver":"Devolver ao banco"}<small>A carta fica livre</small></button>`;
+  }
+  if(a)h+=`<div class="ccacts">${a}</div>`;
+  /* charge rent */
+  if(owner&&!t.hipotecada){
+    const others=playersArr(D).filter(p=>p.id!==t.dono);
+    if(ccPayer&&!D.P[ccPayer])ccPayer=null;
+    const val=rentOf(c,t,ccDice);
+    h+=`<div class="ccsec"><h2>Cobrar aluguel · quem caiu aqui?</h2><div class="fchips">${others.map(p=>`<button type="button" data-payer="${esc(p.id)}" aria-pressed="${ccPayer===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>
+      ${c.acao?`<div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dice="${n}" aria-pressed="${ccDice===n}">${n}</button>`).join("")}</div>`:""}
+      <div class="ccacts" style="margin-top:10px"><button class="btn wide" data-cc="cobrar" ${ccPayer&&val>0?"":"disabled"}>${ccPayer&&val>0?`${esc(shortName(nameOf(ccPayer,D)))} paga ${money(val)} para ${esc(shortName(owner.nome))}`:c.acao&&!ccDice?"Escolha quem caiu e a soma dos dados":"Escolha quem caiu aqui"}</button></div></div>`;
+  }
+  $("#ccBody").innerHTML=h;
+}
+$("#ccBody").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
+  if(b.dataset.offer){titOp(c.id,"ofertar",b.dataset.offer);play("pay");toast(`${c.nome} oferecida a ${nameOf(b.dataset.offer,D)}.`);drawCard();return}
+  if(b.dataset.payer){ccPayer=b.dataset.payer;play("tap");drawCard();return}
+  if(b.dataset.dice){ccDice=+b.dataset.dice;play("tap");drawCard();return}
+  const k=b.dataset.cc;if(!k)return;
+  if(k==="cobrar"){
+    const v=rentOf(c,t,ccDice);if(!ccPayer||!v)return;
+    const r=lancar(ccPayer,t.dono,v,("Aluguel: "+c.nome).slice(0,40));play("pay");
+    toast(`${nameOf(ccPayer,D)} pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});
+    ccPayer=null;ccDice=0;drawCard();return;
+  }
+  if(k==="devolver"&&ccArm!=="devolver"){ccArm="devolver";play("tap");drawCard();setTimeout(()=>{if(ccArm==="devolver"){ccArm=null;drawCard()}},4000);return}
+  ccArm=null;
+  titOp(c.id,k);
+  if(k==="comprar"){play("go");toast(`Você comprou ${c.nome}!`);flashCard()}
+  else if(k==="construir"){play("pay");toast(t.casas===4?`Condomínio em ${c.nome}!`:`Casa construída em ${c.nome}`)}
+  else if(k==="hipotecar"){play("recv");toast(`${c.nome} hipotecada: + ${money(c.hip)}`)}
+  else if(k==="resgatar"){play("pay");toast(`Hipoteca de ${c.nome} paga`)}
+  else if(k==="devolver"){play("undo");toast(`${c.nome} voltou para o banco`)}
+  else play("tap");
+  drawCard();
+});
+
+/* someone offered me a card: confirm on my phone */
+let offerShown=null;
+function drawOffer(D){
+  const box=$("#offerBox");
+  const mine=L&&L.me?Object.values(D.Tit).find(t=>t.oferta===L.me&&!t.dono):null;
+  if(!mine){box.hidden=true;offerShown=null;return}
+  const c=CARDS[mine.carta];
+  if(offerShown===c.id&&!box.hidden)return;
+  offerShown=c.id;
+  $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
+    <div class="obody"><p>O banqueiro está te vendendo essa carta.</p><div class="oprice">${money(c.preco)}</div>
+    <p>${c.acao?`Aluguel: soma dos dados × ${money(c.mult)}`:`Aluguel sem casa: ${money(c.al[0])}`}</p>
+    <button class="btn" data-of="comprar">Comprar</button><button class="btn ghost" data-of="recusar">Não quero</button></div>`;
+  box.hidden=false;
+}
+$("#offerBox").addEventListener("click",e=>{
+  const b=e.target.closest("[data-of]");if(!b)return;
+  const t=Object.values(derive().Tit).find(x=>x.oferta===L.me&&!x.dono);if(!t)return;
+  const c=CARDS[t.carta];
+  titOp(t.carta,b.dataset.of);$("#offerBox").hidden=true;
+  if(b.dataset.of==="comprar"){play("go");flashCard();toast(`Você comprou ${c.nome}!`)}else{play("undo");toast("Compra recusada")}
+});
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);
 else{

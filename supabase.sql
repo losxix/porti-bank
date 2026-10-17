@@ -441,3 +441,160 @@ end $$;
 notify pgrst, 'reload schema';
 
 commit;
+
+-- ==================================================================
+-- CARTAS (Títulos de Posse do Banco Imobiliário Mundo)
+-- ==================================================================
+begin;
+create table if not exists public.pb_cartas (
+  id     smallint primary key,
+  nome   text not null,
+  grupo  text not null,
+  preco  integer not null,
+  casa   integer not null,   -- preço de cada casa (e do condomínio); 0 = ação
+  hipoteca integer not null
+);
+insert into public.pb_cartas (id,nome,grupo,preco,casa,hipoteca) values
+  (1,'Cidade do Cabo','verde',60000,50000,50000),
+  (2,'Londres','vinho',240000,150000,120000),
+  (3,'Berlim','vinho',220000,150000,110000),
+  (4,'Paris','vinho',220000,150000,110000),
+  (5,'Ottawa','amarelo',260000,150000,150000),
+  (6,'Washington','amarelo',260000,150000,150000),
+  (7,'Cairo','verde',100000,50000,50000),
+  (8,'Luanda','verde',75000,50000,50000),
+  (9,'Doha','laranja',320000,200000,160000),
+  (10,'Riade','laranja',300000,200000,150000),
+  (11,'Abu Dhabi','laranja',300000,200000,150000),
+  (12,'Cidade do México','amarelo',280000,150000,140000),
+  (13,'Cidade da Guatemala','roxo',100000,50000,50000),
+  (14,'Seul','verdeesc',140000,100000,70000),
+  (15,'Pequim','verdeesc',160000,100000,80000),
+  (16,'Tóquio','verdeesc',140000,100000,70000),
+  (17,'Buenos Aires','azul',180000,100000,100000),
+  (18,'Camberra','rosa',400000,200000,175000),
+  (19,'Wellington','rosa',350000,200000,200000),
+  (20,'São José','roxo',120000,50000,60000),
+  (21,'OMC','acao',200000,0,100000),
+  (22,'ONU','acao',200000,0,100000),
+  (23,'Santiago','azul',200000,100000,100000),
+  (24,'Montevidéu','azul',180000,100000,100000),
+  (25,'OIT','acao',200000,0,100000),
+  (26,'OTAN','acao',200000,0,100000),
+  (27,'IPCC','acao',150000,0,75000),
+  (28,'OMS','acao',150000,0,75000)
+on conflict (id) do update set nome=excluded.nome, grupo=excluded.grupo, preco=excluded.preco, casa=excluded.casa, hipoteca=excluded.hipoteca;
+
+create table if not exists public.pb_titulos (
+  mesa       text not null references public.pb_mesas(codigo) on delete cascade,
+  carta      smallint not null references public.pb_cartas(id),
+  dono       uuid references public.pb_jogadores(id),
+  casas      smallint not null default 0,   -- 5 = condomínio
+  hipotecada boolean not null default false,
+  oferta     uuid references public.pb_jogadores(id),  -- banqueiro ofereceu; esperando a pessoa confirmar
+  atualizado_em timestamptz not null default now(),
+  primary key (mesa, carta),
+  constraint pb_tit_casas_ck check (casas between 0 and 5)
+);
+alter table public.pb_cartas  enable row level security;
+alter table public.pb_titulos enable row level security;
+revoke insert, update, delete, truncate on public.pb_cartas, public.pb_titulos from anon, authenticated;
+grant select on public.pb_cartas, public.pb_titulos to anon, authenticated;
+drop policy if exists "pb leitura" on public.pb_cartas;
+create policy "pb leitura" on public.pb_cartas for select using (true);
+drop policy if exists "pb leitura" on public.pb_titulos;
+create policy "pb leitura" on public.pb_titulos for select using (true);
+
+-- Tudo que mexe numa carta passa por aqui. Quando envolve dinheiro, o
+-- lançamento é gravado junto (mesmo id = reenvio nunca duplica).
+create or replace function public.pb_titulo(p_id uuid, p_mesa text, p_carta integer, p_acao text, p_por uuid, p_para uuid)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  c pb_cartas%rowtype;
+  t pb_titulos%rowtype;
+  v_banq uuid;
+  v_boss boolean;
+  v_dono uuid;
+begin
+  if exists (select 1 from pb_lancamentos where id = p_id) then return; end if;
+  select * into c from pb_cartas where id = p_carta;
+  if not found then raise exception 'Carta não existe.'; end if;
+  if not exists (select 1 from pb_jogadores where id = p_por and mesa = p_mesa and not removido) then
+    raise exception 'Jogador não encontrado nesta mesa.';
+  end if;
+  select banqueiro into v_banq from pb_mesas where codigo = p_mesa;
+  v_boss := p_por = v_banq;
+  if not v_boss and exists (select 1 from pb_jogadores where id = p_por and situacao is not null) then
+    raise exception 'Você está preso ou de férias: só o banqueiro pode mexer agora.';
+  end if;
+  insert into pb_titulos (mesa, carta) values (p_mesa, p_carta) on conflict do nothing;
+  select * into t from pb_titulos where mesa = p_mesa and carta = p_carta for update;
+
+  if p_acao = 'ofertar' then
+    if not v_boss then raise exception 'Só o banqueiro vende cartas.'; end if;
+    if t.dono is not null then raise exception '% já tem dono.', c.nome; end if;
+    if not exists (select 1 from pb_jogadores where id = p_para and mesa = p_mesa and not removido) then raise exception 'Jogador não encontrado.'; end if;
+    update pb_titulos set oferta = p_para, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+
+  elsif p_acao = 'recusar' then
+    if not (v_boss or t.oferta = p_por) then raise exception 'Sem permissão.'; end if;
+    update pb_titulos set oferta = null, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+
+  elsif p_acao = 'comprar' then
+    v_dono := coalesce(p_para, p_por);
+    if t.dono is not null then raise exception '% já tem dono.', c.nome; end if;
+    if not (v_boss or (t.oferta = p_por and v_dono = p_por)) then raise exception 'Essa carta não foi oferecida para você.'; end if;
+    update pb_titulos set dono = v_dono, oferta = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
+    values (p_id, p_mesa, v_dono, null, c.preco, left('Compra: ' || c.nome, 40), p_por, now(), 'aprovado');
+
+  elsif p_acao in ('construir', 'hipotecar', 'resgatar') then
+    if t.dono is null then raise exception '% não tem dono.', c.nome; end if;
+    if not (v_boss or t.dono = p_por) then raise exception 'Só o dono ou o banqueiro.'; end if;
+    if p_acao = 'construir' then
+      if c.casa = 0 then raise exception 'Ações não têm casas.'; end if;
+      if t.hipotecada then raise exception '% está hipotecada.', c.nome; end if;
+      if t.casas >= 5 then raise exception '% já tem condomínio.', c.nome; end if;
+      update pb_titulos set casas = casas + 1, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+      insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
+      values (p_id, p_mesa, t.dono, null, c.casa, left(case when t.casas = 4 then 'Condomínio: ' else 'Construção: ' end || c.nome, 40), p_por, now(), 'aprovado');
+    elsif p_acao = 'hipotecar' then
+      if t.hipotecada then raise exception '% já está hipotecada.', c.nome; end if;
+      update pb_titulos set hipotecada = true, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+      insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status, aprovado_por, aprovado_em)
+      values (p_id, p_mesa, null, t.dono, c.hipoteca, left('Hipoteca: ' || c.nome, 40), p_por, now(), 'aprovado', p_por, now());
+    else
+      if not t.hipotecada then raise exception '% não está hipotecada.', c.nome; end if;
+      update pb_titulos set hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+      insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
+      values (p_id, p_mesa, t.dono, null, c.hipoteca, left('Fim da hipoteca: ' || c.nome, 40), p_por, now(), 'aprovado');
+    end if;
+
+  elsif p_acao = 'tirar_casa' then
+    if not v_boss then raise exception 'Só o banqueiro.'; end if;
+    update pb_titulos set casas = greatest(casas - 1, 0), atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+
+  elsif p_acao = 'devolver' then
+    if not v_boss then raise exception 'Só o banqueiro.'; end if;
+    update pb_titulos set dono = null, oferta = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+
+  else
+    raise exception 'Ação inválida.';
+  end if;
+end;
+$$;
+revoke all on function public.pb_titulo(uuid, text, integer, text, uuid, uuid) from public;
+grant execute on function public.pb_titulo(uuid, text, integer, text, uuid, uuid) to anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'pb_titulos') then
+    alter publication supabase_realtime add table public.pb_titulos;
+  end if;
+end $$;
+notify pgrst, 'reload schema';
+commit;
