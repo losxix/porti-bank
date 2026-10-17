@@ -134,6 +134,14 @@ const SFX={
     [.62,.7,.79,.9].forEach((t,i)=>{noise(t,.025,.09-i*.015,"bandpass",3000);tone(1300-i*80,t,.08,"triangle",.03)});
     noise(1.35,.025,.2,"highpass",2000);tone(2400,1.36,.04,"square",.05);noise(1.48,.03,.22,"highpass",1800);tone(1700,1.49,.07,"square",.06)
   },
+  /* little car: honk on arrival, engine revs, VUUM driving off */
+  vacay(){
+    tone(110,0,.9,"sawtooth",.035,140);noise(0,.9,.03,"lowpass",400);
+    tone(440,.15,.14,"square",.06);tone(554,.15,.14,"square",.05);tone(440,.36,.2,"square",.06);tone(554,.36,.2,"square",.05);
+    tone(90,1.0,.55,"sawtooth",.07,260);tone(180,1.0,.55,"square",.03,520);
+    tone(320,1.55,.75,"sawtooth",.08,70);noise(1.5,.8,.14,"bandpass",900);noise(1.55,.6,.05,"highpass",4000)
+  },
+  back(){tone(260,0,.8,"sawtooth",.06,110);noise(0,.8,.1,"bandpass",800);tone(440,.95,.14,"square",.06);tone(554,.95,.14,"square",.05);tone(440,1.16,.2,"square",.06);tone(554,1.16,.2,"square",.05)},
   /* key turning and the door opening */
   unlock(){noise(0,.03,.18);tone(2200,0,.05,"square",.06);noise(.12,.03,.18);tone(2600,.12,.05,"square",.06);tone(240,.3,.5,"sawtooth",.04,700);noise(.3,.45,.04);[523,659,784].forEach((f,i)=>tone(f,.85+i*.08,.2,"triangle",.11))}
 };
@@ -286,8 +294,9 @@ function mergeRows(kind,rows,notify){
       if(notify&&L.jog[r.id]&&(r.situacao||null)!==wasSit){
         const mine=r.id===L.me;
         if(r.situacao==="preso"){cellLater(r.id,true);if(mine)toast("Você foi para a cadeia! Só o banqueiro mexe na sua conta agora.")}
-        else if(r.situacao==="ferias"){if(mine){toast("Você está de férias. Só o banqueiro mexe na sua conta agora.");play("tap")}}
+        else if(r.situacao==="ferias"){tripLater(r.id,true);if(mine)toast("Você está de férias. Só o banqueiro mexe na sua conta agora.")}
         else if(wasSit==="preso")cellLater(r.id,false);
+        else if(wasSit==="ferias")tripLater(r.id,false);
         else if(mine){toast("Você voltou para o jogo!");play("unlock")}
       }
       if(notify&&r.id===L.me&&r.removido&&!(L.jog[r.id]||{}).removido){toast("O banqueiro tirou seu cartão da mesa.");play("err")}
@@ -622,6 +631,21 @@ function bancoComeu(nome,valor){
 $("#eat").addEventListener("click",()=>{$("#eat").hidden=true;clearTimeout(eatT)});
 /* cell gate dropping over the player, on every phone */
 let cellT,cellSeen={};
+/* vacation: a little car pulls up with the player, revs and zooms off (or comes back) */
+let tripT;
+function tripShow(id,leaving){
+  const now=Date.now(),k=id+(leaving?"v":"b");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
+  const p=derive().P[id];if(!p)return;
+  const el=$("#trip");
+  $("#tripWho").innerHTML=avatar(p,"big");
+  $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias! 🏖️`:`<b>${esc(p.nome)}</b> voltou das férias!`;
+  el.className="trip "+(leaving?"leaving":"back");
+  el.hidden=true;void el.offsetWidth;el.hidden=false;
+  el.querySelectorAll("*").forEach(n=>{n.style.animation="none";void n.offsetWidth;n.style.animation=""});
+  play(leaving?"vacay":"back");
+  clearTimeout(tripT);tripT=setTimeout(()=>el.hidden=true,leaving?3100:2600);
+}
+function tripLater(id,leaving){setTimeout(()=>tripShow(id,leaving),30)}
 function cellLater(id,closing){setTimeout(()=>cellShow(id,closing),30)}
 function cellShow(id,closing){
   const now=Date.now(),k=id+(closing?"p":"s");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
@@ -636,6 +660,7 @@ function cellShow(id,closing){
   clearTimeout(cellT);cellT=setTimeout(()=>el.hidden=true,closing?2900:2400);
 }
 $("#cell").addEventListener("click",()=>{$("#cell").hidden=true;clearTimeout(cellT)});
+$("#trip").addEventListener("click",()=>{$("#trip").hidden=true;clearTimeout(tripT)});
 const paysBank=r=>!!r.de&&!r.para&&r.motivo!=="Ajuste de saldo";
 
 /* ---------- actions ---------- */
@@ -769,7 +794,7 @@ $("#shJail").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b||!iAmBanker())return;
   const a=SH.actor,v=b.dataset.sit||null,nm=nameOf(a),was=(derive().P[a]||{}).situacao||null;closeSheets();
   enqueue({t:"situacao",id:a,situacao:v,por:L.me,em:nowIso()});
-  if(v==="preso")cellLater(a,true);else if(v==="ferias"){play("tap");toast(nm+" está de férias.")}else if(was==="preso")cellLater(a,false);else{play("unlock");toast(nm+" voltou para o jogo!")}
+  if(v==="preso")cellLater(a,true);else if(v==="ferias")tripLater(a,true);else if(was==="preso")cellLater(a,false);else if(was==="ferias")tripLater(a,false);else{play("unlock");toast(nm+" voltou para o jogo!")}
 });
 let rmT;
 $("#shRemove").onclick=e=>{
@@ -805,7 +830,7 @@ $("#valSave").onclick=()=>{
 function setSituacao(id,v){
   const nm=nameOf(id),was=(derive().P[id]||{}).situacao||null;
   enqueue({t:"situacao",id,situacao:v,por:L.me,em:nowIso()});
-  if(v==="preso")cellLater(id,true);else if(v==="ferias"){play("tap");toast(nm+" está de férias 🏖️")}else if(was==="preso")cellLater(id,false);else{play("unlock");toast(nm+" voltou para o jogo!")}
+  if(v==="preso")cellLater(id,true);else if(v==="ferias")tripLater(id,true);else if(was==="preso")cellLater(id,false);else if(was==="ferias")tripLater(id,false);else{play("unlock");toast(nm+" voltou para o jogo!")}
 }
 $("#players").addEventListener("pointerdown",e=>{
   const row=e.target.closest(".pl");if(!row||!L||!iAmBanker())return;
