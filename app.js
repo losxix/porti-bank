@@ -920,7 +920,8 @@ $("#players").addEventListener("pointermove",e=>{
   sw.bg.style.top=sw.row.offsetTop+"px";sw.bg.style.height=sw.row.offsetHeight+"px";
   sw.bg.className="swbg "+kind+(Math.abs(sw.dx)>80?" go":"");
   const ic=(id,vb)=>`<svg class="sticon" viewBox="${vb}"><use href="#${id}"/></svg>`;
-  sw.bg.innerHTML="<b>"+(kind==="ferias"?'<img class="sticon" src="status-ferias.svg" alt="">'+(undo?"Tirar das férias":"Férias"):(undo?ic("pb-unlock","0 0 64 72"):'<img class="sticon" src="status-preso.svg" alt="">')+(undo?"Soltar":"Prender"))+"</b>";
+  const lbl=kind+(undo?"u":"");
+  if(sw.lbl!==lbl){sw.lbl=lbl;sw.bg.innerHTML="<b>"+(kind==="ferias"?'<img class="sticon" src="status-ferias.svg" alt="">'+(undo?"Tirar das férias":"Férias"):(undo?ic("pb-unlock","0 0 64 72"):'<img class="sticon" src="status-preso.svg" alt="">')+(undo?"Soltar":"Prender"))+"</b>";}
   sw.row.classList.toggle("armed",Math.abs(sw.dx)>80);
 });
 function endSwipe(){
@@ -1334,3 +1335,5 @@ else{
 window.addEventListener("hashchange",()=>{const h=(location.hash||"").replace("#","").toUpperCase();if(h.length===4&&API&&(!L||h!==L.codigo))openMesa(h)});
 window.PORTI_DEBUG={state:()=>L,sync:syncNow,sound:()=>({on:soundOn,ready:soundReady,state:ac&&ac.state})};
 })();
+
+;["status-ferias.svg","status-preso.svg"].forEach(u=>{const im=new Image();im.src=u});
