@@ -1,3 +1,4 @@
+var TX_MIN=8,txShow=TX_MIN,sw=null,swiped=false,swDirty=false;
 /* PORTI BANK — app da mesa.
    A partida fica no Supabase. Cada celular guarda uma cópia e uma fila de
    lançamentos ainda não enviados: sem internet, o jogo continua e a fila sobe
@@ -480,6 +481,7 @@ function render(){
   $("#bankText").innerHTML=boss?"<b>Você é o banqueiro.</b> Você aprova o dinheiro que sai do banco para os jogadores.":bk?`Banqueiro da mesa: <b>${esc(nameOf(bk,D))}</b>. Dinheiro do banco só cai depois que ele aprova.`:"Esta mesa ainda não tem banqueiro.";
   $("#passBankBtn").hidden=!boss||playersArr(D).length<2;
   $("#valBtn").hidden=!boss;
+  $("#swipeTip").hidden=!boss;
   {const ok=L.mesa.esconder!==false;
    $("#privBtn").hidden=!ok;
    $("#hideRuleBtn").hidden=!boss;$("#hideRuleBtn").setAttribute("aria-checked",String(ok));
@@ -492,10 +494,10 @@ function render(){
   const vis=all.filter(p=>!hiddenFor(p)).sort((a,b)=>bal[b.id]-bal[a.id]);
   const hid=all.filter(hiddenFor);
   const max=Math.max(1,...vis.map(p=>bal[p.id]));
-  $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
+  if(sw&&sw.on){swDirty=true}else $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
-    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="jailtag">na cadeia</span>':p.situacao==="ferias"?'<span class="jailtag">férias</span>':"");
-    return `<button class="pl" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
+    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="jailtag">🔒 preso</span>':p.situacao==="ferias"?'<span class="vactag">🏖️ férias</span>':"");
+    return `<button class="pl${p.situacao==="preso"?" jailed":p.situacao==="ferias"?" vac":""}" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
       <span class="nm">${avatar(p)}<span class="nmtxt">${esc(p.nome)}</span>${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
       <span class="bar"><i style="width:${w}%;background:${cc}"></i></span></button>`}).join("");
@@ -506,15 +508,17 @@ function render(){
    const mx=Math.max(0,...all.map(p=>laps[p.id]||0));
    $("#laps").innerHTML=all.map(p=>{
      const n=laps[p.id]||0,ago=lastLap[p.id]?Math.max(0,Math.round((Date.now()-tms(lastLap[p.id]))/60000)):null;
-     const behind=n<mx&&!p.situacao;
+     const behind=n<mx&&p.situacao!=="preso";
      const sit=p.situacao==="preso"?"na cadeia":p.situacao==="ferias"?"de férias":"";
-     return `<div class="lap ${behind?"behind":""}">${avatar(p,"sm")}<div class="lapinfo"><b>${esc(p.nome)}</b><span>${n} ${n===1?"volta":"voltas"}${ago!==null?" · última há "+(ago<1?"menos de 1 min":ago+" min"):""}${sit?" · "+sit:""}${behind?" · está atrás":""}</span></div>${boss?`<button class="btn small lapbtn" data-lap="${esc(p.id)}" ${p.situacao?"disabled":""}>+ ${short(L.mesa.salario)}</button>`:`<span class="lapn">${n}</span>`}</div>`}).join("");
-   $("#lapsHint").textContent=boss?"Toque em + quando o jogador passar pela partida. Quem está na cadeia ou de férias não recebe.":"Quantas vezes cada um recebeu a partida. Quem está atrás pode ter passado sem receber: avise o banqueiro.";}
+     return `<div class="lap ${behind?"behind":""}">${avatar(p,"sm")}<div class="lapinfo"><b>${esc(p.nome)}</b><span>${n} ${n===1?"volta":"voltas"}${ago!==null?" · última há "+(ago<1?"menos de 1 min":ago+" min"):""}${sit?" · "+sit:""}${behind?" · está atrás":""}</span></div>${boss?`<button class="btn small lapbtn" data-lap="${esc(p.id)}" ${p.situacao==="preso"?"disabled":""}>+ ${short(L.mesa.salario)}</button>`:`<span class="lapn">${n}</span>`}</div>`}).join("");
+   $("#lapsHint").textContent=boss?"Toque em + quando o jogador passar pela partida. Quem está preso não recebe; de férias recebe.":"Quantas vezes cada um recebeu a partida. Quem está atrás pode ter passado sem receber: avise o banqueiro.";}
 
   /* statement: everything that happened at the table */
-  const tl=$("#txList");
+  const tl=$("#txList"),more=$("#txMore");
+  more.hidden=txs.length<=TX_MIN;
+  if(!more.hidden){const rest=txs.length-txShow;more.innerHTML=rest>0?`<button data-txmore="1">Ver mais ${Math.min(rest,20)} lançamentos <span>(${rest} escondidos)</span></button>${rest>20?'<button data-txmore="all">Ver tudo</button>':""}`:`<button data-txmore="less">Mostrar menos</button>`}
   if(!txs.length){tl.innerHTML='<p class="empty">Nenhum lançamento ainda. O primeiro pagamento aparece aqui em todos os celulares.</p>';return}
-  tl.innerHTML=txs.slice(0,150).map(t=>{
+  tl.innerHTML=txs.slice(0,txShow).map(t=>{
     const st=t.status||"aprovado",est=!!t.estornado_em,wait=st==="pendente",rec=st==="recusado";
     const cls=(t.para===L.me?"in":t.de===L.me?"out":"")+(est?" est":"")+(wait?" wait":"")+(rec?" rec":"");
     const time=new Date(tms(t.feito_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
@@ -536,6 +540,8 @@ function render(){
       <div class="meta"><span class="num">${time}</span>${t.motivo?`<span>${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join("");
 }
 let joinColor=null;
+$("#txMore").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;play("tap");
+  const v=b.dataset.txmore;if(v==="less"){txShow=TX_MIN;render();$("#txList").scrollIntoView({block:"start"})}else{txShow=v==="all"?1e9:txShow+20;render()}});
 function renderJoin(D){
   const bal=balances(D),all=playersArr(D);
   $("#claimWrap").hidden=!all.length;
@@ -633,7 +639,7 @@ document.addEventListener("click",e=>{
     armedUndo=null;estornar(id);
   }
   else if(b.dataset.lap){
-    if(!iAmBanker())return;const id=b.dataset.lap,p=derive().P[id];if(!p||p.situacao)return;
+    if(!iAmBanker())return;const id=b.dataset.lap,p=derive().P[id];if(!p||p.situacao==="preso"){if(p)toast(p.nome+" está preso e não recebe.");return}
     b.disabled=true;setTimeout(()=>{b.disabled=false},1500);
     const r=lancar(null,id,L.mesa.salario,"Passou pela partida");play("go");
     toast(p.nome+" passou pela partida: + "+money(L.mesa.salario),{label:"Desfazer",run:()=>estornar(r.id)});
@@ -758,6 +764,38 @@ $("#valSave").onclick=()=>{
   L.mesa.saldo_inicial=saldo;L.mesa.salario=salario;render();
   play("go");toast("Valores da mesa atualizados: início "+money(saldo)+", partida "+money(salario));
 };
+
+/* ---------- swipe in the ranking (banker): right = vacation, left = jail ---------- */
+function setSituacao(id,v){
+  const nm=nameOf(id);
+  enqueue({t:"situacao",id,situacao:v,por:L.me,em:nowIso()});
+  if(v==="preso"){play("jail");toast(nm+" foi para a cadeia!")}else if(v==="ferias"){play("tap");toast(nm+" está de férias 🏖️")}else{play("unlock");toast(nm+" voltou para o jogo!")}
+}
+$("#players").addEventListener("pointerdown",e=>{
+  const row=e.target.closest(".pl");if(!row||!L||!iAmBanker()||row.dataset.actor===L.me)return;
+  sw={row,id:row.dataset.actor,x:e.clientX,y:e.clientY,dx:0,on:false};
+});
+$("#players").addEventListener("pointermove",e=>{
+  if(!sw)return;const dx=e.clientX-sw.x,dy=e.clientY-sw.y;
+  if(!sw.on){if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){sw=null;return}if(Math.abs(dx)<12)return;sw.on=true;try{sw.row.setPointerCapture(e.pointerId)}catch(err){}}
+  sw.dx=Math.max(-140,Math.min(140,dx));
+  sw.row.style.transform=`translateX(${sw.dx}px)`;sw.row.style.transition="none";
+  $("#players").dataset.swipe=sw.dx>0?"ferias":"preso";
+  sw.row.classList.toggle("armed",Math.abs(sw.dx)>80);
+});
+function endSwipe(){
+  if(!sw)return;const {row,id,dx,on}=sw;sw=null;
+  row.style.transition="";row.style.transform="";row.classList.remove("armed");delete $("#players").dataset.swipe;
+  if(swDirty){swDirty=false;setTimeout(render,0)}
+  if(!on)return;swiped=true;setTimeout(()=>swiped=false,350);
+  if(Math.abs(dx)<80)return;
+  const p=derive().P[id];if(!p)return;
+  if(dx>0)setSituacao(id,p.situacao==="ferias"?null:"ferias");
+  else setSituacao(id,p.situacao==="preso"?null:"preso");
+}
+$("#players").addEventListener("pointerup",endSwipe);
+$("#players").addEventListener("pointercancel",endSwipe);
+$("#players").addEventListener("click",e=>{if(swiped){e.stopPropagation();e.preventDefault()}},true);
 
 /* ---------- invite ---------- */
 const shareLink=()=>location.origin+location.pathname+"#"+L.codigo;
@@ -885,6 +923,7 @@ $("#calcVal").addEventListener("input",e=>{fmtInput(e.target);drawCalc()});
 
 $("#shGo").onclick=()=>{
   const D=derive(),a=SH.actor,an=nameOf(a,D),proxy=a!==L.me,amt=parseAmt($("#shAmount").value);
+  if((SH.kind==="recv"||SH.kind==="salary")&&(D.P[a]||{}).situacao==="preso"){toast(an+" está preso e não recebe do banco.");play("err");return}
   const before=balances(D)[a];
   let r,msg,snd;
   if(SH.kind==="pay"){
