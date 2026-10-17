@@ -1004,6 +1004,27 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .pc .mhip{z-index:2;top:auto;bottom:40px}
 .carddrag{width:172px}.carddrag .mcard.pc{width:172px}
 
+/* ---------- escanear QR code para entrar na mesa ---------- */
+.scanbtn{display:flex;align-items:center;justify-content:center;gap:10px;background:#252329;color:#FFD12B}
+.scanbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.scan{position:fixed;inset:0;z-index:90;background:#000;display:grid;place-items:center;overflow:hidden}
+.scan[hidden]{display:none}
+.scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.scanframe{position:relative;width:min(70vw,300px);aspect-ratio:1;box-shadow:0 0 0 100vmax #000a;border-radius:22px}
+.scanframe i{position:absolute;width:42px;height:42px;border:5px solid #FFD12B}
+.scanframe i:nth-child(1){left:-3px;top:-3px;border-right:0;border-bottom:0;border-radius:22px 0 0 0}
+.scanframe i:nth-child(2){right:-3px;top:-3px;border-left:0;border-bottom:0;border-radius:0 22px 0 0}
+.scanframe i:nth-child(3){left:-3px;bottom:-3px;border-right:0;border-top:0;border-radius:0 0 0 22px}
+.scanframe i:nth-child(4){right:-3px;bottom:-3px;border-left:0;border-top:0;border-radius:0 0 22px 0}
+.scanline{position:absolute;left:8%;right:8%;top:10%;height:3px;border-radius:3px;background:#FFD12B;box-shadow:0 0 12px 2px #FFD12Baa;animation:scanmove 1.8s ease-in-out infinite alternate}
+@keyframes scanmove{to{top:88%}}
+.scan.hit .scanframe i{border-color:#4FD38A}.scan.hit .scanline{display:none}
+.scantop{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 22px) 20px 0;text-align:center;color:#fff}
+.scantop b{display:block;font-family:var(--display);font-size:21px;letter-spacing:-.6px}
+.scantop small{display:block;margin-top:6px;font-size:14px;color:#ddd}
+.scanx{position:absolute;left:20px;right:20px;width:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);background:#fff8e8;color:#252329}
+@media (prefers-reduced-motion:reduce){.scanline{animation:none;top:50%}}
+
 /* ---------- cartas de cada pessoa (banqueiro) ---------- */
 .cdp{-webkit-appearance:none;appearance:none;background:none;color:inherit;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .cdp.open{background:color-mix(in oklab,var(--pc2) 22%,transparent);border-style:solid;border-color:var(--pc2)}
@@ -1087,6 +1108,8 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
       </div>
       <form class="panel" id="joinCodeForm">
         <h2 style="margin:0">Entrar numa mesa</h2>
+        <button class="btn scanbtn" type="button" id="scanBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 8h3v3H8zM13 13h3v3h-3zM13 8h3M8 13v3"/></svg>Escanear o QR code da mesa</button>
+        <p class="hint" style="margin:-4px 0 0">Aponte para o QR code que aparece em "Convidar" no celular de quem abriu a mesa.</p>
         <label for="codeIn">Código da mesa<input class="inp code-inp" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="K7QM"></label>
         <button class="btn" type="submit">Entrar</button>
       </form>
@@ -1106,6 +1129,14 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
       </div>
     </div>
   </section>
+
+  <!-- scanning a table's QR code -->
+  <div class="scan" id="scan" hidden role="dialog" aria-modal="true" aria-label="Escanear QR code">
+    <video id="scanVideo" playsinline muted autoplay></video>
+    <div class="scanframe" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="scanline"></span></div>
+    <div class="scantop"><b>Escanear QR code</b><small id="scanMsg">Aponte para o QR code da mesa</small></div>
+    <button class="btn scanx" type="button" id="scanClose">Cancelar</button>
+  </div>
 
   <!-- opening a table -->
   <section id="vWait" hidden>

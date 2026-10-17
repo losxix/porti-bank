@@ -922,6 +922,61 @@ $("#setupForm").onsubmit=async e=>{
   catch(err){play("err");toast(err.network?"Sem internet. Para criar a mesa precisa de sinal.":err.config?"O banco online não está configurado.":err.message)}
   finally{b.disabled=false;b.textContent="Abrir o banco"}
 };
+/* ---------- entrar na mesa escaneando o QR code (como no WhatsApp Web) ----------
+   Camera inside the app, so nobody has to open the phone camera and a browser.
+   The QR from "Convidar" carries the table link; only its 4-letter code is used. */
+let scanStream=null,scanRAF=0,scanT=0,scanCv=null;
+function loadJsQR(){
+  if(window.jsQR)return Promise.resolve();
+  return new Promise((ok,bad)=>{const sc=document.createElement("script");sc.src="vendor/jsqr.js";sc.onload=()=>window.jsQR?ok():bad();sc.onerror=bad;document.head.appendChild(sc)});
+}
+function codeFromQR(txt){
+  txt=String(txt||"").trim();
+  let m=txt.match(/#([A-Za-z0-9]{4})\b/);if(m)return m[1].toUpperCase();
+  m=txt.match(/^[A-Za-z0-9]{4}$/);if(m)return txt.toUpperCase();
+  return null;
+}
+async function openScan(){
+  if(!API){toast("O banco online não está configurado.");return}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast("Este celular não deixa o app usar a câmera. Digite o código da mesa.");play("err");return}
+  play("tap");
+  const box=$("#scan"),v=$("#scanVideo");box.classList.remove("hit");$("#scanMsg").textContent="Abrindo a câmera…";box.hidden=false;
+  try{
+    const [stream]=await Promise.all([navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false}),loadJsQR()]);
+    if(box.hidden){stream.getTracks().forEach(t=>t.stop());return}
+    scanStream=stream;v.srcObject=stream;try{await v.play()}catch(e){}
+    $("#scanMsg").textContent="Aponte para o QR code da mesa";
+    scanCv=scanCv||document.createElement("canvas");
+    const tick=()=>{
+      if(!scanStream)return;
+      scanRAF=requestAnimationFrame(tick);
+      const now=performance.now();if(now-scanT<120||v.readyState<2||!v.videoWidth)return;scanT=now;
+      const k=Math.min(1,640/Math.max(v.videoWidth,v.videoHeight)),w=Math.round(v.videoWidth*k),h=Math.round(v.videoHeight*k);
+      scanCv.width=w;scanCv.height=h;const cx=scanCv.getContext("2d",{willReadFrequently:true});cx.drawImage(v,0,0,w,h);
+      let r=null;try{r=window.jsQR(cx.getImageData(0,0,w,h).data,w,h,{inversionAttempts:"dontInvert"})}catch(e){}
+      if(!r||!r.data)return;
+      const code=codeFromQR(r.data);
+      if(!code){$("#scanMsg").textContent="Esse QR code não é de uma mesa do PORTI BANK";return}
+      box.classList.add("hit");$("#scanMsg").textContent="Mesa "+code+"! Entrando…";play("go");
+      try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}
+      stopScan(true);setTimeout(()=>{$("#scan").hidden=true;openMesa(code)},350);
+    };
+    tick();
+  }catch(e){
+    stopScan();
+    const denied=e&&(e.name==="NotAllowedError"||e.name==="SecurityError");
+    toast(denied?"O app precisa da câmera para ler o QR code. Permita a câmera e tente de novo, ou digite o código.":"Não deu para abrir a câmera. Digite o código da mesa.");play("err");
+  }
+}
+function stopScan(keep){
+  cancelAnimationFrame(scanRAF);
+  if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}
+  try{$("#scanVideo").srcObject=null}catch(e){}
+  if(!keep)$("#scan").hidden=true;
+}
+$("#scanBtn").onclick=openScan;
+$("#scanClose").onclick=()=>{stopScan();play("tap")};
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&scanStream)stopScan()});
 $("#resumeBtn").onclick=()=>{const last=ls.get("pb-ultima");if(last)openMesa(last)};
 $("#waitBack").onclick=()=>leave(true);
 $("#joinBack").onclick=()=>leave(false);
