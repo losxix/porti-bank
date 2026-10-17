@@ -929,18 +929,18 @@ $("#copyBtn").onclick=async()=>{
 let SH={kind:"pay",actor:null,to:null,note:""};
 /* each reason has its own color and symbol, the same everywhere (sheet, statement, filters) */
 const RMETA={
-  "Aluguel":{c:"#E0582F",d:"M4 11 12 4l8 7M6 9.5V20h12V9.5M10 20v-5h4v5"},
-  "Compra":{c:"#2F6FDB",d:"M6 8h12l-1 12H7L6 8Zm3 0V6.5a3 3 0 0 1 6 0V8"},
-  "Imposto":{c:"#7B4FD6",d:"M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3.5 11.5 5-5M10 9.5h.01M14 14.5h.01"},
-  "Construção":{c:"#D98200",d:"M3 20h18M5 20V12h6v8M11 20V8h8v12M14 11h2M14 14h2M7.5 15h1"},
-  "Sorte/Revés":{c:"#139E6B",d:"M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.8 6.2a2.3 2.3 0 1 1 3.2 2.1c-.7.3-1 .8-1 1.5M12 16.5h.01"},
-  "Venda ao banco":{c:"#0E8C9A",d:"M3 10 12 4l9 6M5 10v8M19 10v8M3 20h18M12 9v8m-3-3 3 3 3-3"},
-  "Hipoteca":{c:"#9A6532",d:"M7 3h7l4 4v14H7V3Zm7 0v4h4M10 17h5M10 13.5h5"},
-  "Prêmio":{c:"#C99A00",d:"M8 4h8v5a4 4 0 0 1-8 0V4Zm0 2H5a3 3 0 0 0 3 4m8-4h3a3 3 0 0 1-3 4M12 13v4m-4 3h8l-1-3H9l-1 3"},
-  "Passou pela partida":{c:"#C99A00",d:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 0v18M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"},
-  "Ajuste de saldo":{c:"#6E6A75",d:"M5 6h14M5 12h14M5 18h14M9 4v4M15 10v4M8 16v4"}
+  "Aluguel":{c:"#FF8A5B",d:"M4 11 12 4l8 7M6 9.5V20h12V9.5M10 20v-5h4v5"},
+  "Compra":{c:"#5AA9FF",d:"M6 8h12l-1 12H7L6 8Zm3 0V6.5a3 3 0 0 1 6 0V8"},
+  "Imposto":{c:"#B48CFF",d:"M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3.5 11.5 5-5M10 9.5h.01M14 14.5h.01"},
+  "Construção":{c:"#FFB13B",d:"M3 20h18M5 20V12h6v8M11 20V8h8v12M14 11h2M14 14h2M7.5 15h1"},
+  "Sorte/Revés":{c:"#4FD69C",d:"M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.8 6.2a2.3 2.3 0 1 1 3.2 2.1c-.7.3-1 .8-1 1.5M12 16.5h.01"},
+  "Venda ao banco":{c:"#46D3D9",d:"M3 10 12 4l9 6M5 10v8M19 10v8M3 20h18M12 9v8m-3-3 3 3 3-3"},
+  "Hipoteca":{c:"#E8A87C",d:"M7 3h7l4 4v14H7V3Zm7 0v4h4M10 17h5M10 13.5h5"},
+  "Prêmio":{c:"#FFD12B",d:"M8 4h8v5a4 4 0 0 1-8 0V4Zm0 2H5a3 3 0 0 0 3 4m8-4h3a3 3 0 0 1-3 4M12 13v4m-4 3h8l-1-3H9l-1 3"},
+  "Passou pela partida":{c:"#FFE79B",d:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 0v18M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"},
+  "Ajuste de saldo":{c:"#D9D3C7",d:"M5 6h14M5 12h14M5 18h14M9 4v4M15 10v4M8 16v4"}
 };
-function rIcon(r){const m=RMETA[r];return m?`<svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg>`:""}
+function rIcon(r){const m=RMETA[r];return m?`<span class="rbadge"><svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg></span>`:""}
 function rStyle(r){const m=RMETA[r];return m?` style="--rc:${m.c}"`:""}
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
 function quickValues(){
