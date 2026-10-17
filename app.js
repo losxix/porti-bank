@@ -1339,22 +1339,39 @@ function askMotion(){
     try{DM.requestPermission().then(r=>{motionOK=r==="granted";if(motionOK)listenMotion();else if(bumpMode)bumpFail("O celular não deixou usar o sensor de movimento. Feche e abra o app e toque em Permitir.")}).catch(()=>{motionAsked=false})}catch(e){motionAsked=false}
   }else if(DM){motionOK=true;listenMotion()}
 }
-let motionOn=false,lastMag=0;
+/* Knock detector. An encostar is a short, sharp change in acceleration (high
+   "jerk"); moving the phone around by hand changes it smoothly. So we look at
+   how much the acceleration vector jumps between two readings, not only how big
+   it is. Front/back touches (z axis, screen against screen or back against
+   back) count with a light touch; side bumps need a bit more. Touching the
+   screen also jolts the phone along z, so motion right after a finger tap is
+   ignored. */
+let motionOn=false,prevA=null,grav=null,lastTouch=0;
+const KN_FRONT_JERK=2.4,KN_FRONT_ACC=1.8,KN_ANY_JERK=3.5,KN_ANY_ACC=3;
+["pointerdown","pointerup","touchstart","touchend"].forEach(ev=>document.addEventListener(ev,()=>{lastTouch=Date.now()},{passive:true,capture:true}));
 function listenMotion(){
   if(motionOn)return;motionOn=true;
   window.addEventListener("devicemotion",e=>{
-    const a=e.acceleration&&e.acceleration.x!=null?e.acceleration:null;let mag;
-    if(a)mag=Math.hypot(a.x||0,a.y||0,a.z||0);
-    else{const g=e.accelerationIncludingGravity;if(!g)return;mag=Math.abs(Math.hypot(g.x||0,g.y||0,g.z||0)-9.81)}
-    const jerk=Math.abs(mag-lastMag);lastMag=mag;
-    if(mag>7&&jerk>5)knock();
+    let a=e.acceleration&&e.acceleration.x!=null?{x:e.acceleration.x||0,y:e.acceleration.y||0,z:e.acceleration.z||0}:null;
+    if(!a){ /* no gravity-free reading: take gravity out with a slow filter */
+      const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
+      const r={x:g.x||0,y:g.y||0,z:g.z||0};
+      if(!grav)grav={...r};else for(const k of["x","y","z"])grav[k]=grav[k]*.9+r[k]*.1;
+      a={x:r.x-grav.x,y:r.y-grav.y,z:r.z-grav.z};
+    }
+    const p=prevA;prevA=a;if(!p)return;
+    if(Date.now()-lastTouch<300)return;
+    const jx=a.x-p.x,jy=a.y-p.y,jz=a.z-p.z;
+    const jerk=Math.hypot(jx,jy,jz),mag=Math.hypot(a.x,a.y,a.z),side=Math.hypot(jx,jy);
+    const front=Math.abs(jz)>KN_FRONT_JERK&&Math.max(Math.abs(a.z),Math.abs(p.z))>KN_FRONT_ACC&&Math.abs(jz)>=side*.7;
+    if(front||(jerk>KN_ANY_JERK&&Math.max(mag,Math.hypot(p.x,p.y,p.z))>KN_ANY_ACC))knock();
   });
 }
 function knock(byTap){
   const now=Date.now();if(now-lastKnock<(byTap?400:1200))return;lastKnock=now;
   if(!L||!L.me||document.visibilityState!=="visible")return;
   bumpSend(bumpMode?"pay":"any");
-  if(bumpMode){$("#bumpTitle").textContent="Procurando o outro celular…";bumpTry();
+  if(bumpMode){$("#bumpTitle").textContent="Senti o toque! Procurando o outro celular…";try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}bumpTry();
     const k=lastKnock;setTimeout(()=>{if(bumpMode&&lastKnock===k)$("#bumpTitle").textContent="A internet de alguém está lenta… espere um pouco ou aproxime de novo"},4000)}
 }
 function bumpIn(p){
