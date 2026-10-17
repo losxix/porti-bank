@@ -1502,7 +1502,7 @@ try{document.fonts.ready.then(()=>{fontsDone=true;if(L&&!$("#cardsSheet").hidden
 function miniCard(c,t,D){
   const nf=15;
   const art=window.PB_ART||{icon:()=>"",flag:()=>""};
-  return `<button type="button" class="mcard pc${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}${t.hipotecada?" hip":""}${!t.dono&&(t.oferta||t.pedido)?" pend":""}" data-card="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor};--nf:${nf}px">
+  return `<button type="button" class="mcard pc${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}${t.hipotecada?" hip":""}${!t.dono&&(t.oferta||t.pedido)?" pend":""}" data-card="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor};--nf:${nf}px${t.dono&&D.P[t.dono]?`;--oc:${colorOf(D.P[t.dono].cor).c}`:""}">
     <span class="mtop"><span>Título de posse</span><i>#${String(c.id).padStart(2,"0")}</i></span>
     <span class="mhead"><span class="mico">${art.icon(c.id)}</span><span class="mname"><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></span><span class="mflag">${art.flag(c)}</span></span>
     <span class="mglobe">${GLOBE_SVG}</span>

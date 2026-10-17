@@ -909,8 +909,8 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .b3own .avatar{width:32px!important;height:32px!important;min-width:32px!important;min-height:32px!important;max-width:32px!important;max-height:32px!important;flex:0 0 32px!important;font-size:15px!important;border:2.5px solid var(--oc)!important;opacity:.92}
 .b3t.prop .b3nm,.b3t.prop .b3pr{position:relative;z-index:1}
 .b3t.own .b3nm{text-shadow:0 1px 2px #000,0 0 4px #000}
-.bld{position:absolute;transform-style:preserve-3d;--wall:#F4E7C9;--glass:#FFD35A;--roof:#2FA24E}
-.bld.condo{--wall:#D8552E;--glass:#FFE59A;--roof:#6E2A16}
+.bld{position:absolute;transform-style:preserve-3d;--wall:color-mix(in oklab,var(--oc,#2FA24E) 24%,#F7EEDB);--glass:#FFD35A;--roof:var(--oc,#2FA24E)}
+.bld.condo{--wall:var(--oc,#D8552E);--glass:#FFE59A;--roof:color-mix(in oklab,var(--oc,#D8552E) 55%,#000)}
 .bld i{position:absolute;display:block}
 .bld .bsh{border-radius:4px;background:#0008;filter:blur(2px)}
 .bld .wv{background:linear-gradient(90deg,var(--wall) 0 17%,#0000 17% 41%,var(--wall) 41% 59%,#0000 59% 83%,var(--wall) 83%),repeating-linear-gradient(to bottom,var(--wall) 0 2px,var(--glass) 2px calc(var(--fh) - 2px),var(--wall) calc(var(--fh) - 2px) var(--fh));box-shadow:inset 0 0 0 .6px #0006}
@@ -994,9 +994,9 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .pc .mhouses small{font-size:7.1px;font-weight:600;color:#6b675f;margin-right:2px}
 .pc .mhouses i{display:block;width:10.5px;height:10.5px;border:0!important;border-radius:0;background:none!important}
 .pc .mhouses i svg{display:block;width:100%;height:100%;fill:none;stroke:#252329;stroke-width:1.5;stroke-linejoin:round}
-.pc .mhouses i.on svg{fill:#3DAA4A}
+.pc .mhouses i.on svg{fill:var(--oc,#3DAA4A)}
 .pc .mhouses b{font-family:var(--mono);font-size:8px;font-weight:600;color:#252329}
-.pc .mhouses .condo{display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border:1.5px solid #252329;border-radius:5px;background:#E0582F;color:#fff;font-size:7.2px;font-weight:800}
+.pc .mhouses .condo{display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border:1.5px solid #252329;border-radius:5px;background:var(--oc,#E0582F);color:#fff;font-size:7.2px;font-weight:800}
 .pc .mhouses .condo svg{width:9px;height:9px;fill:none;stroke:#fff;stroke-width:1.7;stroke-linejoin:round}
 .mcard.pc.mine{outline:3px solid #FFD12B;outline-offset:2px}
 .mcard.pc.hip .mprice{background:#E2DDD1}
