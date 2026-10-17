@@ -46,6 +46,9 @@ create table if not exists public.pb_jogadores (
 );
 create index if not exists pb_jogadores_mesa_idx on public.pb_jogadores (mesa);
 alter table public.pb_jogadores add column if not exists removido boolean not null default false;
+alter table public.pb_jogadores add column if not exists foto text;
+alter table public.pb_jogadores drop constraint if exists pb_jogadores_foto_ck;
+alter table public.pb_jogadores add constraint pb_jogadores_foto_ck check (foto is null or (char_length(foto) <= 30000 and foto ~ '^data:image/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$'));
 
 create table if not exists public.pb_lancamentos (
   id            uuid primary key,
@@ -325,6 +328,20 @@ begin
 end;
 $$;
 
+-- Foto de perfil (já chega pequena do celular).
+create or replace function public.pb_foto(p_id uuid, p_foto text)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if p_foto is not null and (char_length(p_foto) > 30000 or p_foto !~ '^data:image/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$') then
+    raise exception 'Foto inválida ou grande demais.';
+  end if;
+  update pb_jogadores set foto = p_foto, atualizado_em = now() where id = p_id;
+end;
+$$;
+
 -- Esconde/mostra o saldo do jogador para a mesa. Vale a mudança mais recente.
 create or replace function public.pb_ocultar(p_id uuid, p_oculto boolean, p_quando timestamptz)
 returns void
@@ -350,6 +367,7 @@ revoke all on function public.pb_estornar(uuid, uuid) from public;
 revoke all on function public.pb_passar_banco(text, uuid, uuid) from public;
 revoke all on function public.pb_ocultar(uuid, boolean, timestamptz) from public;
 revoke all on function public.pb_remover_jogador(uuid, uuid) from public;
+revoke all on function public.pb_foto(uuid, text) from public;
 revoke all on function public.pb_mesa_valores(text, uuid, integer, integer) from public;
 grant execute on function public.pb_criar_mesa(integer, integer) to anon, authenticated;
 grant execute on function public.pb_entrar(uuid, text, text, text) to anon, authenticated;
@@ -360,6 +378,7 @@ grant execute on function public.pb_estornar(uuid, uuid) to anon, authenticated;
 grant execute on function public.pb_passar_banco(text, uuid, uuid) to anon, authenticated;
 grant execute on function public.pb_ocultar(uuid, boolean, timestamptz) to anon, authenticated;
 grant execute on function public.pb_remover_jogador(uuid, uuid) to anon, authenticated;
+grant execute on function public.pb_foto(uuid, text) to anon, authenticated;
 grant execute on function public.pb_mesa_valores(text, uuid, integer, integer) to anon, authenticated;
 
 -- 4) Tempo real: avisa os celulares na hora -----------------------------

@@ -164,6 +164,7 @@ function derive(){
     if(op.t==="entrar"&&!P[op.id])P[op.id]={id:op.id,nome:op.nome,cor:op.cor,oculto:false,criado_em:op.em,pend:true};
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
     else if(op.t==="remover"&&P[op.id])P[op.id].removido=true;
+    else if(op.t==="foto"&&P[op.id])P[op.id].foto=op.foto;
     else if(op.t==="lancar"&&!T[op.id])T[op.id]={id:op.id,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:op.status||"aprovado",pend:true};
     else if(op.t==="estornar"&&T[op.id]&&!T[op.id].estornado_em&&T[op.id].status!=="recusado"){
       if(T[op.id].status==="pendente"){T[op.id].status="recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
@@ -202,6 +203,7 @@ function confirmOp(op){
   else if(op.t==="ocultar"&&L.jog[op.id]){L.jog[op.id].oculto=op.oculto;L.jog[op.id].oculto_em=op.em}
   else if(op.t==="banco"&&L.mesa){L.mesa.banqueiro=op.para}
   else if(op.t==="remover"&&L.jog[op.id]){L.jog[op.id].removido=true}
+  else if(op.t==="foto"&&L.jog[op.id]){L.jog[op.id].foto=op.foto}
   else if(op.t==="valores"&&L.mesa){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
 }
 function sendOp(op){
@@ -212,6 +214,7 @@ function sendOp(op){
   if(op.t==="recusar")return API.rpc("pb_recusar",{p_id:op.id,p_por:op.por});
   if(op.t==="ocultar")return API.rpc("pb_ocultar",{p_id:op.id,p_oculto:op.oculto,p_quando:op.em});
   if(op.t==="banco")return API.rpc("pb_passar_banco",{p_mesa:L.codigo,p_de:op.por,p_para:op.para});
+  if(op.t==="foto")return API.rpc("pb_foto",{p_id:op.id,p_foto:op.foto});
   if(op.t==="remover")return API.rpc("pb_remover_jogador",{p_id:op.id,p_por:op.por});
   if(op.t==="valores")return API.rpc("pb_mesa_valores",{p_mesa:L.codigo,p_por:op.por,p_saldo_inicial:op.saldo,p_salario:op.salario});
   return Promise.resolve();
@@ -431,7 +434,7 @@ function render(){
   const box=$("#reqBox");
   if(boss&&pending.length){
     box.hidden=false;$("#reqTitle").textContent=pending.length>1?pending.length+" pedidos para aprovar":"Pedido para aprovar";
-    $("#reqList").innerHTML=pending.map(t=>`<div class="rq"><div class="who"><span class="pawn" style="background:${colorOf((D.P[t.para]||{}).cor).c}"></span><span class="n">${esc(nameOf(t.para,D))}</span></div><div class="amt">+ ${money(t.valor)}</div>
+    $("#reqList").innerHTML=pending.map(t=>`<div class="rq"><div class="who">${avatar(D.P[t.para],"sm")}<span class="n">${esc(nameOf(t.para,D))}</span></div><div class="amt">+ ${money(t.valor)}</div>
       <div class="meta" style="grid-column:1/-1">${esc(t.motivo||"Receber do banco")}${t.lancado_por!==t.para?" · pedido por "+esc(nameOf(t.lancado_por,D)):""}</div>
       <div class="btns"><button class="btn ghost small" data-deny="${esc(t.id)}">Recusar</button><button class="btn ok small" data-approve="${esc(t.id)}">Aprovar ${money(t.valor)}</button></div></div>`).join("");
   }else{
@@ -449,6 +452,9 @@ function render(){
   $("#aRecv").querySelector(".s").textContent=boss?"Do banco":"Pedido ao banqueiro";
   $("#rules").textContent="Mesa "+L.codigo+" · Início "+money(L.mesa.saldo_inicial)+" · Partida "+money(L.mesa.salario);
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
+  $("#privEye").innerHTML=`<use href="#${meP.oculto?"i-eyeoff":"i-eye"}"/>`;
+  $("#photoPrev").outerHTML=avatar(meP,"big").replace('class="avatar big"','class="avatar big" id="photoPrev"');
+  $("#photoSub").textContent=meP.foto?"Aparece no ranking da mesa. Toque para trocar.":"Aparece no ranking da mesa. Toque para escolher.";
   $("#privSub").textContent=meP.oculto?"Os outros veem $ ••••• no lugar do seu saldo":"Os outros jogadores veem seu saldo no ranking";
   $("#bankText").innerHTML=boss?"<b>Você é o banqueiro.</b> Você aprova o dinheiro que sai do banco para os jogadores.":bk?`Banqueiro da mesa: <b>${esc(nameOf(bk,D))}</b>. Dinheiro do banco só cai depois que ele aprova.`:"Esta mesa ainda não tem banqueiro.";
   $("#passBankBtn").hidden=!boss||playersArr(D).length<2;
@@ -464,7 +470,7 @@ function render(){
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
     const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"");
     return `<button class="pl" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
-      <span class="nm"><span class="pawn" style="background:${cc}"></span>${esc(p.nome)}${tag}</span>
+      <span class="nm">${avatar(p)}${esc(p.nome)}${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
       <span class="bar"><i style="width:${w}%;background:${cc}"></i></span></button>`}).join("");
 
@@ -496,12 +502,37 @@ let joinColor=null;
 function renderJoin(D){
   const bal=balances(D),all=playersArr(D);
   $("#claimWrap").hidden=!all.length;
-  $("#claimList").innerHTML=all.map(p=>`<button data-claim="${esc(p.id)}"><span class="pawn" style="background:${colorOf(p.cor).c}"></span>${esc(p.nome)}<span class="v">${p.oculto?MASK:fmt(bal[p.id])}</span></button>`).join("");
+  $("#claimList").innerHTML=all.map(p=>`<button data-claim="${esc(p.id)}">${avatar(p)}${esc(p.nome)}<span class="v">${p.oculto?MASK:fmt(bal[p.id])}</span></button>`).join("");
   const used=new Set(all.map(p=>p.cor));
   if(!joinColor||used.has(joinColor))joinColor=(COLORS.find(c=>!used.has(c.k))||COLORS[0]).k;
   $("#jColors").innerHTML=COLORS.map(c=>`<button type="button" class="sw" style="background:${c.c}" aria-label="${c.k}" aria-pressed="${c.k===joinColor}" data-color="${c.k}" ${used.has(c.k)?"disabled":""}></button>`).join("");
 }
 function last4(id){let h=7;for(const c of String(id))h=(h*31+c.charCodeAt(0))>>>0;return String(h%10000).padStart(4,"0")}
+
+/* ---------- avatar ---------- */
+function avatar(p,size){
+  p=p||{};const c=colorOf(p.cor).c;
+  const img=p.foto&&/^data:image\/(jpeg|webp|png);base64,/.test(p.foto)?`background-image:url('${p.foto}');`:"";
+  return `<span class="avatar ${size||""}" style="--pc:${c};${img}">${img?"":esc((p.nome||"?").trim().charAt(0))}</span>`;
+}
+/* shrink any photo to a small square (~6 KB) before it goes to the table */
+function shrinkPhoto(file){
+  return new Promise((ok,fail)=>{
+    const url=URL.createObjectURL(file),im=new Image();
+    im.onload=()=>{
+      try{
+        const S=144,c=document.createElement("canvas");c.width=S;c.height=S;
+        const x=c.getContext("2d"),m=Math.min(im.naturalWidth,im.naturalHeight);
+        x.drawImage(im,(im.naturalWidth-m)/2,(im.naturalHeight-m)/2,m,m,0,0,S,S);
+        let q=.72,d=c.toDataURL("image/jpeg",q);
+        while(d.length>14000&&q>.3){q-=.1;d=c.toDataURL("image/jpeg",q)}
+        URL.revokeObjectURL(url);ok(d);
+      }catch(e){URL.revokeObjectURL(url);fail(e)}
+    };
+    im.onerror=()=>{URL.revokeObjectURL(url);fail(new Error("Não deu para abrir essa foto."))};
+    im.src=url;
+  });
+}
 
 /* ---------- toast ---------- */
 let toastT;
@@ -604,6 +635,13 @@ $("#joinForm").onsubmit=e=>{
   $("#jName").value="";play("go");
   toast(first?"Cartão emitido. Você é o banqueiro desta mesa.":"Cartão emitido: "+money(L.mesa.saldo_inicial));
 };
+$("#refreshBtn").onclick=async e=>{
+  const b=e.currentTarget;b.textContent="Atualizando…";b.disabled=true;
+  if(L)save();
+  try{const r=await navigator.serviceWorker.getRegistration();if(r)await r.update()}catch(err){}
+  try{for(const k of await caches.keys())await caches.delete(k)}catch(err){}
+  location.reload();
+};
 $("#switchBtn").onclick=()=>{forceJoin=true;play("tap");render()};
 let leaveT;$("#leaveBtn").onclick=e=>{
   const b=e.currentTarget;
@@ -612,6 +650,12 @@ let leaveT;$("#leaveBtn").onclick=e=>{
   b.textContent=L&&L.out.length?`${L.out.length} lançamento(s) ainda não enviado(s). Toque de novo para sair`:"Toque de novo para sair";
   leaveT=setTimeout(()=>{delete b.dataset.arm;b.textContent="Sair da mesa"},4000);
 };
+$("#photoBtn").onclick=()=>{play("tap");$("#photoIn").value="";$("#photoIn").click()};
+$("#photoIn").addEventListener("change",async e=>{
+  const f=e.target.files&&e.target.files[0];if(!f||!L||!L.me)return;
+  try{const d=await shrinkPhoto(f);enqueue({t:"foto",id:L.me,foto:d,em:nowIso()});play("recv");toast("Foto atualizada")}
+  catch(err){play("err");toast(err.message||"Não deu para usar essa foto.")}
+});
 $("#privBtn").onclick=()=>{
   const D=derive(),meP=D.P[L.me];if(!meP)return;const v=!meP.oculto;
   enqueue({t:"ocultar",id:L.me,oculto:v,em:nowIso()});play("tap");
@@ -631,7 +675,7 @@ $("#aSalary").onclick=e=>{
 };
 $("#passBankBtn").onclick=()=>{
   const D=derive();
-  $("#bankList").innerHTML=playersArr(D).filter(p=>p.id!==L.me).map(p=>`<button data-bank="${esc(p.id)}"><span class="pawn" style="background:${colorOf(p.cor).c}"></span>${esc(p.nome)}</button>`).join("");
+  $("#bankList").innerHTML=playersArr(D).filter(p=>p.id!==L.me).map(p=>`<button data-bank="${esc(p.id)}">${avatar(p)}${esc(p.nome)}</button>`).join("");
   $("#scrim").hidden=false;$("#bankSheet").hidden=false;play("tap");
 };
 $("#bankClose").onclick=closeSheets;
@@ -719,7 +763,7 @@ function drawSheet(){
     if($("#shQuick").querySelector("[data-setval]"))$("#shQuick").innerHTML=quickValues().map(v=>`<button data-add="${v}">+${short(v)}</button>`).join("")+`<button data-add="0">Limpar</button>`;
   }
   const others=playersArr(D).filter(x=>x.id!==a);
-  $("#shTo").innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}">${x.cor?`<span class="pawn" style="background:${colorOf(x.cor).c}"></span>`:""}${esc(x.id===L.me?x.nome+" (você)":x.nome)}</button>`).join("");
+  $("#shTo").innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}">${x.cor?avatar(x,"sm"):""}${esc(x.id===L.me?x.nome+" (você)":x.nome)}</button>`).join("");
   $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button data-note="${esc(r)}" aria-pressed="${SH.note===r}">${esc(r)}</button>`).join("");
   const amt=parseAmt($("#shAmount").value),has=$("#shAmount").value!=="";
   const go=$("#shGo"),an=p.nome||"?",warn=$("#shWarn");

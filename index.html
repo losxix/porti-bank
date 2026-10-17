@@ -355,7 +355,7 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="hero">
         <img class="biglogo" src="logo.webp" alt="Porti Bank" width="520" height="499">
-        <h1>O banco da sua mesa</h1>
+        <h1>O banco da resenha RS</h1>
         <p>Cada jogador usa o próprio celular como cartão. Sem cadastro: um cria a mesa e os outros entram com o código.</p>
       </div>
       <div class="panel" id="resumeBox" hidden>
@@ -415,14 +415,16 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
         <button class="act gold" id="aSalary"><span class="ic"><svg><use href="#i-orbit"/></svg></span><span><b id="salaryLbl">+ $200</b><span class="s">Passei pela partida</span></span></button>
         <button class="act" id="aRecv"><span class="ic"><svg><use href="#i-in"/></svg></span><span><b>Receber</b><span class="s">Do banco</span></span></button>
       </div>
-      <button class="priv" id="privBtn" role="switch" aria-checked="false"><span><b>Esconder meu saldo da mesa</b><span class="s" id="privSub">Os outros jogadores veem seu saldo no ranking</span></span><span class="sw2"></span></button>
+      <button class="priv" id="photoBtn" type="button"><span class="avatar big" id="photoPrev"></span><span><b>Minha foto</b><span class="s" id="photoSub">Aparece no ranking da mesa. Toque para escolher.</span></span></button>
+      <input type="file" id="photoIn" accept="image/*" hidden>
+      <button class="priv" id="privBtn" role="switch" aria-checked="false"><svg class="privEye" id="privEye" aria-hidden="true"><use href="#i-eye"/></svg><span><b>Esconder meu saldo da mesa</b><span class="s" id="privSub">Os outros jogadores veem seu saldo no ranking</span></span><span class="sw2"></span></button>
       <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
         <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
       <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="tx" id="txList"></div></div>
       <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Mudar os valores da mesa</button></div>
       <div class="foot">
         <span class="muted num" style="font-size:12.5px" id="rules"></span>
-        <span style="display:flex;gap:16px"><button class="link" id="switchBtn">Trocar cartão</button><button class="link" id="leaveBtn" style="color:var(--neg)">Sair da mesa</button></span>
+        <span style="display:flex;gap:16px"><button class="link" id="switchBtn">Trocar cartão</button><button class="link" id="leaveBtn" style="color:var(--neg)">Sair da mesa</button><button class="link" id="refreshBtn">Atualizar app</button></span>
       </div>
     </div>
   </section>
