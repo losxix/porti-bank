@@ -592,6 +592,7 @@ function render(){
   if(!$("#plSheet").hidden&&D.P[SH.actor])drawPlayer();
   if(!$("#cardsSheet").hidden&&!cdDrag)drawCards();
   if(!$("#cardSheet").hidden)drawCard();
+  if(!$("#b3d").hidden&&!b3.ptrs.size)drawBoard3d();
   drawOffer(D);
   {const mine=Object.values(D.Tit).filter(t=>t.dono===L.me).length;$("#cardsSub").textContent=mine?`Você tem ${mine} ${mine===1?"carta":"cartas"} · propriedades, casas e hipotecas`:"Propriedades, casas e hipotecas"}
   const boss=iAmBanker(),bk=banker();
@@ -1517,7 +1518,7 @@ function openCard(id){
   cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;
   $("#cardSheet").hidden=false;$("#scrim").hidden=false;$("#ccBody").scrollTop=0;drawCard();
 }
-function closeCard(){$("#cardSheet").hidden=true;if($("#cardsSheet").hidden)$("#scrim").hidden=true}
+function closeCard(){$("#cardSheet").hidden=true;$("#cardSheet").classList.remove("over3d");if($("#cardsSheet").hidden)$("#scrim").hidden=true}
 $("#ccClose").onclick=closeCard;
 function drawCard(){
   const c=CARDS[cdCard];if(!c)return;
@@ -1656,6 +1657,88 @@ function offerDo(k){
 $("#offerBox").addEventListener("click",e=>{
   const b=e.target.closest("[data-of]");if(!b)return;offerDo(b.dataset.of);
 });
+/* ================= TABULEIRO 3D (CSS 3D, sem bibliotecas) ================= */
+const BOARD=[{c:"Início",k:"corner"},{id:7},{id:8},{id:27},{id:1},{id:9},{s:"Sorte ou Revés"},{id:10},{id:21},{id:11},
+ {c:"Cadeia",k:"corner cadeia"},{s:"Sorte ou Revés"},{id:23},{id:24},{s:"Restituição do FMI · receba 2000×"},{id:17},{id:22},{id:18},{id:19},{id:13},
+ {c:"Férias",k:"corner ferias"},{id:20},{id:25},{s:"Dívidas FMI · pague 2000×"},{s:"Sorte ou Revés"},{id:4},{id:3},{s:"Sorte ou Revés"},{id:2},{id:28},
+ {c:"Vá para a cadeia",k:"corner vai"},{id:14},{s:"Sorte ou Revés"},{id:15},{id:16},{id:12},{id:26},{id:5},{s:"Sorte ou Revés"},{id:6}];
+var b3={yaw:-18,pitch:52,zoom:0,fit:1,hl:null,ptrs:new Map(),last:null,moved:0,t0:0};
+function b3pos(i){
+  if(i<=10)return{r:11,c:11-i,rot:0,inx:0,iny:-1};
+  if(i<=20)return{r:11-(i-10),c:1,rot:1,inx:1,iny:0};
+  if(i<=30)return{r:1,c:1+(i-20),rot:2,inx:0,iny:1};
+  return{r:1+(i-30),c:11,rot:3,inx:-1,iny:0};
+}
+function cubeHTML(x,y,w,d,h,top,side,front){
+  const f=(st)=>`<i style="${st}"></i>`;
+  return `<div class="cube" style="left:${x-w/2}px;top:${y-d/2}px;width:${w}px;height:${d}px">`+
+    f(`left:0;top:0;width:${w}px;height:${d}px;background:${top};transform:translateZ(${h}px)`)+
+    f(`left:0;top:0;width:${w}px;height:${h}px;background:${side};transform-origin:0 0;transform:rotateX(90deg)`)+
+    f(`left:0;top:${d}px;width:${w}px;height:${h}px;background:${front};transform-origin:0 0;transform:rotateX(90deg)`)+
+    f(`left:0;top:0;width:${h}px;height:${d}px;background:${side};transform-origin:0 0;transform:rotateY(-90deg)`)+
+    f(`left:${w}px;top:0;width:${h}px;height:${d}px;background:${front};transform-origin:0 0;transform:rotateY(-90deg)`)+`</div>`;
+}
+function drawBoard3d(){
+  const D=derive(),fr=668/12.1,corner=fr*1.55;
+  let h="";
+  BOARD.forEach((sq,i)=>{
+    const p=b3pos(i),w=(p.c===1||p.c===11)?corner:fr,ht=(p.r===1||p.r===11)?corner:fr;
+    const style=`grid-row:${p.r};grid-column:${p.c};--w:${w}px;--h:${ht}px`;
+    if(sq.c){h+=`<div class="b3t ${sq.k} r${p.rot}" style="${style}"><div class="b3in"><span class="b3nm">${sq.c}</span></div></div>`;return}
+    if(sq.s){h+=`<div class="b3t sp r${p.rot}" style="${style}"><div class="b3in"><span class="b3nm">${sq.s}</span></div></div>`;return}
+    const c=CARDS[sq.id],t=D.Tit[c.id]||blankTit(c.id),own=t.dono&&D.P[t.dono];
+    const oc=own?colorOf(own.cor).c:"";
+    const dim=b3.hl&&(b3.hl==="free"?!!t.dono:t.dono!==b3.hl);
+    let extra="";
+    if(own){
+      const L2=Math.max(w,ht);
+      const hx=p.inx*L2*.18,hy=p.iny*L2*.18,px=-p.inx*L2*.16,py=-p.iny*L2*.16;
+      let houses="";
+      if(t.casas>=5)houses=cubeHTML(hx,hy,22,22,26,"#FF9B70","#C5512A","#E0582F");
+      else for(let k=0;k<t.casas;k++){const off=(k-(t.casas-1)/2)*12;houses+=cubeHTML(hx+(p.inx?0:off),hy+(p.iny?0:off),10,10,10,"#8BE596","#2E8B44","#3FAA55")}
+      extra=`<div class="b3houses" style="transform:translateZ(1px)">${houses}</div><div class="b3pin" style="transform:translate(${px}px,${py}px) translateZ(2px)"><div class="b3stand" style="--oc:${oc}">${avatar(own)}</div></div>`;
+    }
+    h+=`<div class="b3t r${p.rot}${c.acao?" acao":""}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}" data-b3="${c.id}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}"><div class="b3in">${c.acao?"":'<span class="b3band"></span>'}<span class="b3nm">${esc(c.nome)}</span><span class="b3pr">${short(c.preco)}</span></div>${extra}</div>`;
+  });
+  h+=`<div class="b3center"><img src="logo.webp" alt=""><b>MUNDO</b></div>`;
+  $("#b3dBoard").innerHTML=h;
+  /* legend */
+  const ppl=playersArr(D),cnt=id=>Object.values(D.Tit).filter(t=>t.dono===id).length,free=Object.keys(CARDS).filter(id=>!(D.Tit[id]||{}).dono).length;
+  $("#b3dLegend").innerHTML=`<div><button type="button" class="b3lp" data-hl="" aria-pressed="${!b3.hl}" style="--oc:#FFD12B"><span>Todos<small>28 cartas</small></span></button><button type="button" class="b3lp" data-hl="free" aria-pressed="${b3.hl==="free"}" style="--oc:#7ee08a"><span>Livres<small>${free} no banco</small></span></button>${ppl.map(p=>`<button type="button" class="b3lp" data-hl="${esc(p.id)}" aria-pressed="${b3.hl===p.id}" style="--oc:${colorOf(p.cor).c}">${avatar(p)}<span>${esc(shortName(p.nome))}<small>${cnt(p.id)} cartas</small></span></button>`).join("")}</div>`;
+  b3cam();
+}
+function b3cam(){
+  const st=$("#b3dStage");if(!st)return;
+  b3.fit=Math.min(st.clientWidth/800,st.clientHeight/(740+b3.pitch*2));
+  const z=b3.fit*Math.pow(1.25,b3.zoom);
+  $("#b3dCam").style.transform=`translateY(${-b3.pitch*0.5}px) scale(${z})`;
+  $("#b3dBoard").style.transform=`rotateX(${b3.pitch}deg) rotateZ(${b3.yaw}deg)`;
+  const bill=`rotateZ(${-b3.yaw}deg) rotateX(${-b3.pitch}deg)`;
+  document.querySelectorAll("#b3dBoard .b3stand").forEach(el=>el.style.transform=bill);
+}
+function openBoard3d(){closeSheets();$("#b3d").hidden=false;drawBoard3d();play("tap")}
+$("#cd3d").onclick=openBoard3d;
+$("#b3dClose").onclick=()=>{$("#b3d").hidden=true;play("tap")};
+$("#b3dLegend").addEventListener("click",e=>{const b=e.target.closest("[data-hl]");if(!b)return;b3.hl=b.dataset.hl||null;play("tap");drawBoard3d()});
+document.querySelector(".b3dtools").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(!b)return;const v=b.dataset.v;
+  if(v==="top"){b3.pitch=0;b3.yaw=0}else if(v==="tilt"){b3.pitch=52;b3.yaw=-18}else if(v==="+")b3.zoom=Math.min(4,b3.zoom+1);else b3.zoom=Math.max(-1,b3.zoom-1);
+  $("#b3dBoard").style.transition=$("#b3dCam").style.transition="transform .35s ease";b3cam();setTimeout(()=>{$("#b3dBoard").style.transition=$("#b3dCam").style.transition=""},360);play("tap")});
+const b3s=$("#b3dStage");
+b3s.addEventListener("pointerdown",e=>{b3s.setPointerCapture(e.pointerId);b3.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});b3.moved=0;b3.t0=Date.now();b3.last=null});
+b3s.addEventListener("pointermove",e=>{
+  if(!b3.ptrs.has(e.pointerId))return;
+  const prev=b3.ptrs.get(e.pointerId);b3.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(b3.ptrs.size===1){const dx=e.clientX-prev.x,dy=e.clientY-prev.y;b3.moved+=Math.abs(dx)+Math.abs(dy);b3.yaw-=dx*.35;b3.pitch=Math.max(0,Math.min(72,b3.pitch-dy*.3));b3cam()}
+  else if(b3.ptrs.size===2){const[a,b]=[...b3.ptrs.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(b3.last){b3.zoom=Math.max(-1,Math.min(4,b3.zoom+Math.log(d/b3.last)/Math.log(1.25)));b3cam()}b3.last=d;b3.moved+=99}
+});
+function b3up(e){
+  const tap=b3.ptrs.size===1&&b3.moved<8&&Date.now()-b3.t0<400;
+  b3.ptrs.delete(e.pointerId);b3.last=null;
+  if(tap){const el=document.elementFromPoint(e.clientX,e.clientY);const t=el&&el.closest("[data-b3]");if(t){play("tap");openCard(+t.dataset.b3);$("#cardSheet").classList.add("over3d")}}
+}
+b3s.addEventListener("pointerup",b3up);b3s.addEventListener("pointercancel",e=>{b3.ptrs.delete(e.pointerId);b3.last=null});
+b3s.addEventListener("wheel",e=>{e.preventDefault();b3.zoom=Math.max(-1,Math.min(4,b3.zoom-e.deltaY/300));b3cam()},{passive:false});
+window.addEventListener("resize",()=>{if(!$("#b3d").hidden)b3cam()});
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);
 else{
