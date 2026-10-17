@@ -68,6 +68,11 @@ function makeApi(){
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_mesas",filter:"codigo=eq."+code},p=>p.new&&onRow("mesa",p.new))
         .subscribe(s=>onStatus(s));
       return()=>{try{sb.removeChannel(ch)}catch(e){}};
+    },
+    bumps(code,onBump){
+      const ch=sb.channel("toque-"+code,{config:{broadcast:{self:false,ack:false}}})
+        .on("broadcast",{event:"bump"},m=>m&&m.payload&&onBump(m.payload)).subscribe();
+      return{send(p){try{ch.send({type:"broadcast",event:"bump",payload:p})}catch(e){}},close(){try{sb.removeChannel(ch)}catch(e){}}};
     }
   };
 }
@@ -379,6 +384,7 @@ async function openMesa(code){
     unsub=API.subscribe(code,(kind,row)=>{if(L===cur){mergeRows(kind,[row],firstSync);save();render()}},
       st=>{if(L!==cur)return;const was=live;live=st==="SUBSCRIBED";if(live&&!was)syncNow();schedule()});
   }
+  bumpOpen(code);
   if(!L.mesa){
     const cur=L;
     try{
@@ -472,7 +478,7 @@ function render(){
   $("#barsLbl").textContent=meP.situacao==="ferias"?"DE FÉRIAS":"NA CADEIA";
   $("#jailBanner").hidden=!sit;
   if(sit)$("#jailBanner").textContent=(sit==="ferias"?"Você está de férias.":"Você está na cadeia.")+" Só o banqueiro pode mexer na sua conta até ele te soltar.";
-  ["#aPay","#aSalary","#aRecv"].forEach(x=>{$(x).disabled=!!sit});
+  ["#aPay","#aSalary","#aRecv","#aBump"].forEach(x=>{$(x).disabled=!!sit});
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
   $("#privEye").innerHTML=`<use href="#${meP.oculto?"pe-eyeoff":"pe-eye"}"/>`;
   $("#photoPrev").outerHTML=avatar(meP,"big").replace('class="avatar big"','class="avatar big" id="photoPrev"');
@@ -986,6 +992,80 @@ if("serviceWorker" in navigator&&location.protocol!=="file:"){
   navigator.serviceWorker.addEventListener("controllerchange",()=>{if(hadController&&!reloaded){reloaded=true;location.reload()}});
   navigator.serviceWorker.register("sw.js").then(r=>{try{r.update()}catch(e){}}).catch(()=>{});
 }
+/* ---------- encostar: pagar aproximando um celular do outro ----------
+   Web apps can't use NFC on the iPhone, so this works like the old "Bump":
+   both phones feel the knock at the same moment (motion sensor) and tell the
+   table over the internet. The phone that pressed "Encostar para pagar" pairs
+   with whoever knocked within ~1.5s and opens Pagar with that person chosen. */
+const BUMP_WIN=1500;
+var bumpCh=null,bumpCode=null,motionOK=false,motionAsked=false,lastKnock=0,recentPeers=[],bumpMode=null,bumpT=null;
+function bumpOpen(code){
+  if(bumpCode===code)return;if(bumpCh){bumpCh.close();bumpCh=null}bumpCode=code;
+  if(API&&API.bumps)bumpCh=API.bumps(code,bumpIn);
+}
+function bumpSend(role){if(bumpCh&&L&&L.me)bumpCh.send({id:L.me,role,mesa:L.codigo})}
+function askMotion(){
+  if(motionAsked)return;motionAsked=true;
+  const DM=window.DeviceMotionEvent;
+  if(DM&&typeof DM.requestPermission==="function"){
+    try{DM.requestPermission().then(r=>{motionOK=r==="granted";if(motionOK)listenMotion();else if(bumpMode)bumpFail("O celular não deixou usar o sensor de movimento. Feche e abra o app e toque em Permitir.")}).catch(()=>{motionAsked=false})}catch(e){motionAsked=false}
+  }else if(DM){motionOK=true;listenMotion()}
+}
+let motionOn=false,lastMag=0;
+function listenMotion(){
+  if(motionOn)return;motionOn=true;
+  window.addEventListener("devicemotion",e=>{
+    const a=e.acceleration&&e.acceleration.x!=null?e.acceleration:null;let mag;
+    if(a)mag=Math.hypot(a.x||0,a.y||0,a.z||0);
+    else{const g=e.accelerationIncludingGravity;if(!g)return;mag=Math.abs(Math.hypot(g.x||0,g.y||0,g.z||0)-9.81)}
+    const jerk=Math.abs(mag-lastMag);lastMag=mag;
+    if(mag>13&&jerk>8)knock();
+  });
+}
+function knock(){
+  const now=Date.now();if(now-lastKnock<1200)return;lastKnock=now;
+  if(!L||!L.me||document.visibilityState!=="visible")return;
+  bumpSend(bumpMode?"pay":"any");
+  if(bumpMode){$("#bumpTitle").textContent="Procurando o outro celular…";bumpTry()}
+}
+function bumpIn(p){
+  if(!L||!p||!p.id||p.id===L.me||(p.mesa&&p.mesa!==L.codigo))return;
+  const now=Date.now();
+  recentPeers=recentPeers.filter(x=>now-x.at<BUMP_WIN);recentPeers.push({id:p.id,role:p.role,at:now});
+  if(p.role==="pay"&&now-lastKnock<BUMP_WIN&&!bumpMode){play("ask");toast(nameOf(p.id)+" encostou para te pagar 💸")}
+  if(bumpMode)bumpTry();
+}
+let bumpDecideT=null;
+function bumpTry(again){
+  if(!bumpMode||!lastKnock)return;
+  const wait=lastKnock+600-Date.now();
+  if(wait>0&&!again){clearTimeout(bumpDecideT);bumpDecideT=setTimeout(()=>bumpTry(),wait);return}
+  const near=recentPeers.filter(x=>Math.abs(x.at-lastKnock)<BUMP_WIN);
+  let D=derive();
+  if(again!=="synced"&&near.some(x=>!D.P[x.id])){const k=lastKnock;Promise.resolve(syncNow()).catch(()=>{}).then(()=>{if(lastKnock===k)bumpTry("synced")});return}
+  const ids=[...new Set(near.filter(x=>D.P[x.id]&&!D.P[x.id].removido).map(x=>x.id))];
+  if(ids.length!==1){if(ids.length>1)$("#bumpTitle").textContent="Mais de um celular encostou. Tente de novo.";return}
+  const to=ids[0];bumpClose();play("recv");
+  openSheet("pay");if($("#sheet").hidden)return;SH.to=to;drawSheet();toast("Pagar para "+nameOf(to));
+  setTimeout(()=>{try{$("#shAmount").focus()}catch(e){}},250);
+}
+function bumpStart(){
+  if(!L||!L.me)return;
+  if(!bumpCh){toast("Encostar precisa de internet. Use Pagar normalmente.");play("err");return}
+  askMotion();
+  bumpMode="pay";$("#bumpTitle").textContent="Encoste no celular de quem vai receber";
+  $("#bump").hidden=false;play("tap");
+  clearTimeout(bumpT);bumpT=setTimeout(()=>{if(bumpMode)bumpFail("Não encontrei o outro celular. O app dele precisa estar aberto.")},25000);
+}
+function bumpFail(msg){bumpClose();toast(msg);play("err")}
+function bumpClose(){bumpMode=null;clearTimeout(bumpT);$("#bump").hidden=true}
+$("#aBump").onclick=bumpStart;
+$("#bumpCancel").onclick=()=>{bumpClose();play("tap")};
+$("#bumpList").onclick=()=>{bumpClose();openSheet("pay")};
+/* the receiver's phone must feel the knock too: ask for the motion sensor on the first tap inside a table */
+document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()},{passive:true});
+if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
+window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock})};
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);
 else{

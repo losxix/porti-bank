@@ -389,6 +389,24 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .txmore button{flex:1;min-height:44px;border:1.5px solid var(--edge);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;font-weight:700;font-size:14px;box-shadow:1px 2px 0 var(--shadow);cursor:pointer}
 .txmore button span{font-weight:500;opacity:.65;font-size:12px}
 .txmore button[data-txmore=all]{flex:0 0 auto;padding:0 14px}
+.act.bumpact{grid-column:1/-1;min-height:70px;background:#252329;color:#FFF8E8}
+.act.bumpact .ic{background:#FFD12B;font-size:20px;border-color:#FFD12B}
+.act.bumpact span.s{color:#d8d2c2}
+.bump{position:fixed;inset:0;z-index:80;background:rgba(20,20,26,.72);display:grid;place-items:center;padding:20px}
+.bump[hidden]{display:none}
+.bumpbox{width:min(360px,100%);background:var(--surface);color:var(--ink);border:2.5px solid var(--edge);border-radius:24px;padding:24px 20px 18px;text-align:center;box-shadow:5px 6px 0 #000}
+.bumpbox h3{font-family:var(--display);font-size:21px;line-height:1.2;margin:10px 0 8px}
+.bumpbox p{font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 16px}
+.bumpanim{position:relative;height:96px}
+.bumpanim .ph{position:absolute;top:14px;font-size:54px;line-height:1}
+.bumpanim .a{left:calc(50% - 70px);animation:bumpL 1.4s ease-in-out infinite}
+.bumpanim .b{right:calc(50% - 70px);transform:scaleX(-1);animation:bumpR 1.4s ease-in-out infinite}
+.bumpanim .wave{position:absolute;left:50%;top:40px;width:14px;height:14px;margin:-7px;border-radius:50%;border:3px solid #FFD12B;opacity:0;animation:bumpW 1.4s ease-out infinite}
+@keyframes bumpL{0%,100%{transform:translateX(0)}45%,55%{transform:translateX(22px)}}
+@keyframes bumpR{0%,100%{transform:scaleX(-1) translateX(0)}45%,55%{transform:scaleX(-1) translateX(22px)}}
+@keyframes bumpW{0%,45%{opacity:0;transform:scale(.4)}50%{opacity:1}100%{opacity:0;transform:scale(4)}}
+.bumpbtn{display:block;width:100%;min-height:48px;margin-top:9px;border:2px solid var(--edge);border-radius:14px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:800;font-size:15px;box-shadow:2px 3px 0 var(--shadow)}
+.bumpbtn.ghost{background:transparent;color:var(--ink);box-shadow:none}
 </style>
 </head>
 <body>
@@ -492,6 +510,7 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
         <button class="act primary" id="aPay"><span class="ic"><svg><use href="#i-send"/></svg></span><span><b>Pagar</b><span class="s">Aluguel, compra ou imposto, para alguém ou o banco</span></span></button>
         <button class="act gold" id="aSalary"><span class="ic"><svg><use href="#i-orbit"/></svg></span><span><b id="salaryLbl">+ $200</b><span class="s">Passei pela partida</span></span></button>
         <button class="act" id="aRecv"><span class="ic"><svg><use href="#i-in"/></svg></span><span><b>Receber</b><span class="s">Do banco</span></span></button>
+        <button class="act bumpact" id="aBump"><span class="ic">📲</span><span><b>Encostar para pagar</b><span class="s">Encoste seu celular no de quem vai receber</span></span></button>
       </div>
       <button class="priv" id="photoBtn" type="button"><span class="avatar big" id="photoPrev"></span><span><b>Minha foto</b><span class="s" id="photoSub">Aparece no ranking da mesa. Toque para escolher.</span></span></button>
       <input type="file" id="photoIn" accept="image/*" hidden>
@@ -511,6 +530,13 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 </div>
 
 <div class="scrim" id="scrim" hidden></div>
+<div class="bump" id="bump" hidden role="dialog" aria-modal="true"><div class="bumpbox">
+  <div class="bumpanim"><span class="ph a">📱</span><span class="ph b">📱</span><span class="wave"></span></div>
+  <h3 id="bumpTitle">Encoste no celular de quem vai receber</h3>
+  <p>Dê uma batidinha de leve, celular com celular. O app da outra pessoa precisa estar aberto na mesa.</p>
+  <button class="bumpbtn" id="bumpList" type="button">Escolher na lista</button>
+  <button class="bumpbtn ghost" id="bumpCancel" type="button">Cancelar</button>
+</div></div>
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shName">
   <div class="sheet-h"><div class="who"><span class="pawn" id="shDot" style="width:16px;height:16px"></span><div style="min-width:0"><b id="shName"></b><small id="shBal"></small></div></div><button class="link" id="shClose">Cancelar</button></div>
   <div class="tabs" id="shTabs">
