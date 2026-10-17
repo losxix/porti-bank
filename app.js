@@ -997,13 +997,16 @@ if("serviceWorker" in navigator&&location.protocol!=="file:"){
    both phones feel the knock at the same moment (motion sensor) and tell the
    table over the internet. The phone that pressed "Encostar para pagar" pairs
    with whoever knocked within ~1.5s and opens Pagar with that person chosen. */
-const BUMP_WIN=1500;
+/* Each phone stamps the knock with its own clock (phones keep their clocks in
+   sync with the network, usually within a fraction of a second), so a slow
+   connection that delivers the message seconds later still matches. */
+const BUMP_WIN=1500,BUMP_SAME=900,BUMP_LATE=8000;
 var bumpCh=null,bumpCode=null,motionOK=false,motionAsked=false,lastKnock=0,recentPeers=[],bumpMode=null,bumpT=null;
 function bumpOpen(code){
   if(bumpCode===code)return;if(bumpCh){bumpCh.close();bumpCh=null}bumpCode=code;
   if(API&&API.bumps)bumpCh=API.bumps(code,bumpIn);
 }
-function bumpSend(role){if(bumpCh&&L&&L.me)bumpCh.send({id:L.me,role,mesa:L.codigo})}
+function bumpSend(role){if(bumpCh&&L&&L.me)bumpCh.send({id:L.me,role,mesa:L.codigo,t:lastKnock})}
 function askMotion(){
   if(motionAsked)return;motionAsked=true;
   const DM=window.DeviceMotionEvent;
@@ -1026,21 +1029,27 @@ function knock(byTap){
   const now=Date.now();if(now-lastKnock<(byTap?400:1200))return;lastKnock=now;
   if(!L||!L.me||document.visibilityState!=="visible")return;
   bumpSend(bumpMode?"pay":"any");
-  if(bumpMode){$("#bumpTitle").textContent="Procurando o outro celular…";bumpTry()}
+  if(bumpMode){$("#bumpTitle").textContent="Procurando o outro celular…";bumpTry();
+    const k=lastKnock;setTimeout(()=>{if(bumpMode&&lastKnock===k)$("#bumpTitle").textContent="A internet de alguém está lenta… espere um pouco ou encoste de novo"},4000)}
 }
 function bumpIn(p){
   if(!L||!p||!p.id||p.id===L.me||(p.mesa&&p.mesa!==L.codigo))return;
   const now=Date.now();
-  recentPeers=recentPeers.filter(x=>now-x.at<BUMP_WIN);recentPeers.push({id:p.id,role:p.role,at:now});
-  if(p.role==="pay"&&now-lastKnock<BUMP_WIN&&!bumpMode){play("ask");toast(nameOf(p.id)+" encostou para te pagar 💸")}
+  recentPeers=recentPeers.filter(x=>now-x.got<BUMP_LATE);recentPeers.push({id:p.id,role:p.role,got:now,t:+p.t||0});
+  if(p.role==="pay"&&sameKnock(recentPeers[recentPeers.length-1])&&!bumpMode){play("ask");toast(nameOf(p.id)+" encostou para te pagar 💸")}
   if(bumpMode)bumpTry();
 }
 let bumpDecideT=null;
+function sameKnock(x){
+  if(!x||!lastKnock)return false;
+  if(x.t&&Math.abs(x.t-lastKnock)<BUMP_SAME)return true;   // same moment by the clocks
+  return Math.abs(x.got-lastKnock)<BUMP_WIN;               // or arrived right away
+}
 function bumpTry(again){
   if(!bumpMode||!lastKnock)return;
   const wait=lastKnock+600-Date.now();
   if(wait>0&&!again){clearTimeout(bumpDecideT);bumpDecideT=setTimeout(()=>bumpTry(),wait);return}
-  const near=recentPeers.filter(x=>Math.abs(x.at-lastKnock)<BUMP_WIN);
+  const near=recentPeers.filter(sameKnock);
   let D=derive();
   if(again!=="synced"&&near.some(x=>!D.P[x.id])){const k=lastKnock;Promise.resolve(syncNow()).catch(()=>{}).then(()=>{if(lastKnock===k)bumpTry("synced")});return}
   const ids=[...new Set(near.filter(x=>D.P[x.id]&&!D.P[x.id].removido).map(x=>x.id))];
@@ -1068,7 +1077,7 @@ $("#bumpList").onclick=()=>{bumpClose();openSheet("pay")};
 /* the receiver's phone must feel the knock too: ask for the motion sensor on the first tap inside a table */
 document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()},{passive:true});
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
-window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock})};
+window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
 const fromHash=(location.hash||"").replace("#","").toUpperCase().replace(/[^A-Z0-9]/g,"");
 if(fromHash.length===4&&API)openMesa(fromHash);
 else{
