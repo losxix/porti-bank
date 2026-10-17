@@ -1086,13 +1086,13 @@ function knock(byTap){
   if(!L||!L.me||document.visibilityState!=="visible")return;
   bumpSend(bumpMode?"pay":"any");
   if(bumpMode){$("#bumpTitle").textContent="Procurando o outro celular…";bumpTry();
-    const k=lastKnock;setTimeout(()=>{if(bumpMode&&lastKnock===k)$("#bumpTitle").textContent="A internet de alguém está lenta… espere um pouco ou encoste de novo"},4000)}
+    const k=lastKnock;setTimeout(()=>{if(bumpMode&&lastKnock===k)$("#bumpTitle").textContent="A internet de alguém está lenta… espere um pouco ou aproxime de novo"},4000)}
 }
 function bumpIn(p){
   if(!L||!p||!p.id||p.id===L.me||(p.mesa&&p.mesa!==L.codigo))return;
   const now=Date.now();
   recentPeers=recentPeers.filter(x=>now-x.got<BUMP_LATE);recentPeers.push({id:p.id,role:p.role,got:now,t:+p.t||0});
-  if(p.role==="pay"&&sameKnock(recentPeers[recentPeers.length-1])&&!bumpMode){play("ask");toast(nameOf(p.id)+" encostou para te pagar")}
+  if(p.role==="pay"&&sameKnock(recentPeers[recentPeers.length-1])&&!bumpMode){play("ask");toast(nameOf(p.id)+" aproximou o NFC para te pagar")}
   if(bumpMode)bumpTry();
 }
 let bumpDecideT=null;
@@ -1109,16 +1109,16 @@ function bumpTry(again){
   let D=derive();
   if(again!=="synced"&&near.some(x=>!D.P[x.id])){const k=lastKnock;Promise.resolve(syncNow()).catch(()=>{}).then(()=>{if(lastKnock===k)bumpTry("synced")});return}
   const ids=[...new Set(near.filter(x=>D.P[x.id]&&!D.P[x.id].removido).map(x=>x.id))];
-  if(ids.length!==1){if(ids.length>1)$("#bumpTitle").textContent="Mais de um celular encostou. Tente de novo.";return}
+  if(ids.length!==1){if(ids.length>1)$("#bumpTitle").textContent="Mais de um celular foi aproximado. Tente de novo.";return}
   const to=ids[0];bumpClose();play("recv");
   openSheet("pay");if($("#sheet").hidden)return;SH.to=to;drawSheet();toast("Pagar para "+nameOf(to));
   setTimeout(()=>{try{$("#shAmount").focus()}catch(e){}},250);
 }
 function bumpStart(){
   if(!L||!L.me)return;
-  if(!bumpCh){toast("Encostar precisa de internet. Use Pagar normalmente.");play("err");return}
+  if(!bumpCh){toast("O NFC precisa de internet. Use Pagar normalmente.");play("err");return}
   askMotion();
-  bumpMode="pay";$("#bumpTitle").textContent="Encoste no celular de quem vai receber";
+  bumpMode="pay";$("#bumpTitle").textContent="Aproxime do celular de quem vai receber";
   $("#bump").hidden=false;play("tap");
   clearTimeout(bumpT);bumpT=setTimeout(()=>{if(bumpMode)bumpFail("Não encontrei o outro celular. O app dele precisa estar aberto.")},25000);
 }
@@ -1127,7 +1127,7 @@ function bumpClose(){bumpMode=null;clearTimeout(bumpT);$("#bump").hidden=true}
 $("#aBump").onclick=bumpStart;
 $("#bumpTap").onclick=()=>{knock(true);play("tap");const b=$("#bumpTap");b.classList.remove("hit");void b.offsetWidth;b.classList.add("hit")};
 /* the receiver taps their own card at the same moment: no need to touch the phones */
-$("#card").addEventListener("click",e=>{if(e.target.closest("button,input,label,a"))return;if(!L||!L.me||bumpMode)return;knock(true);flashCard()});
+
 $("#bumpCancel").onclick=()=>{bumpClose();play("tap")};
 $("#bumpList").onclick=()=>{bumpClose();openSheet("pay")};
 /* the receiver's phone must feel the knock too: ask for the motion sensor on the first tap inside a table */

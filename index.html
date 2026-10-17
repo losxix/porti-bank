@@ -513,6 +513,11 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .palm{position:absolute;left:3%;top:22%;width:23%;height:44%;filter:drop-shadow(0 3px 0 #0003)}
 .bumpanim .ph svg{width:44px;height:76px;display:block}
 .bumpanim .ph{font-size:0}
+.act.bumpact b{font-family:var(--display);font-size:22px;letter-spacing:.5px}
+.act.bumpact .ic svg{width:24px;height:24px;color:#252329;stroke-width:2.6}
+.bumpanim .nfcw{position:absolute;left:50%;top:28px;width:34px;height:34px;margin-left:-17px;color:#252329;animation:nfcPulse 1.4s ease-in-out infinite}
+@keyframes nfcPulse{0%,100%{opacity:.25;transform:scale(.85)}50%{opacity:1;transform:scale(1.1)}}
+.bumpanim .wave{display:none}
 </style>
 </head>
 <body>
@@ -623,7 +628,7 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
         <button class="act primary" id="aPay"><span class="ic"><svg><use href="#i-send"/></svg></span><span><b>Pagar</b><span class="s">Aluguel, compra ou imposto, para alguém ou o banco</span></span></button>
         <button class="act gold" id="aSalary"><span class="ic"><svg><use href="#i-orbit"/></svg></span><span><b id="salaryLbl">+ $200</b><span class="s">Passei pela partida</span></span></button>
         <button class="act" id="aRecv"><span class="ic"><svg><use href="#i-in"/></svg></span><span><b>Receber</b><span class="s">Do banco</span></span></button>
-        <button class="act bumpact" id="aBump"><span class="ic"><svg><use href="#i-bump"/></svg></span><span><b>Encostar para pagar</b><span class="s">Encoste de leve no celular de quem recebe, ou toquem juntos na tela</span></span></button>
+        <button class="act bumpact" id="aBump"><span class="ic"><svg><use href="#i-nfc"/></svg></span><span><b>NFC</b><span class="s">Aproxime do celular de quem vai receber</span></span></button>
       </div>
       <button class="priv" id="photoBtn" type="button"><span class="avatar big" id="photoPrev"></span><span><b>Minha foto</b><span class="s" id="photoSub">Aparece no ranking da mesa. Toque para escolher.</span></span></button>
       <input type="file" id="photoIn" accept="image/*" hidden>
@@ -644,11 +649,11 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 
 <div class="scrim" id="scrim" hidden></div>
 <div class="bump" id="bump" hidden role="dialog" aria-modal="true"><div class="bumpbox">
-  <div class="bumpanim"><span class="ph a"><svg><use href="#pb-phone"/></svg></span><span class="ph b"><svg><use href="#pb-phone"/></svg></span><span class="wave"></span></div>
-  <h3 id="bumpTitle">Encoste no celular de quem vai receber</h3>
-  <p>Um toquezinho de leve, tipo brinde. <b>Sem bater:</b> a outra pessoa toca no chip do cartão dela e você toca no botão abaixo, ao mesmo tempo.</p>
-  <button class="bumpbtn tapnow" id="bumpTap" type="button"><svg class="btnic"><use href="#i-tap"/></svg>Tocar junto</button>
-  <button class="bumpbtn ghost" id="bumpList" type="button">Escolher na lista</button>
+  <div class="bumpanim"><span class="ph a"><svg><use href="#pb-phone"/></svg></span><svg class="nfcw"><use href="#i-nfc"/></svg><span class="ph b"><svg><use href="#pb-phone"/></svg></span><span class="wave"></span></div>
+  <h3 id="bumpTitle">Aproxime do celular de quem vai receber</h3>
+  <p>Dê um toquezinho de lado no celular da outra pessoa e afaste. Encoste pela lateral, não pela parte de cima. O app dela precisa estar aberto.</p>
+  <button class="bumpbtn tapnow" id="bumpTap" type="button" hidden></button>
+  <button class="bumpbtn" id="bumpList" type="button">Escolher na lista</button>
   <button class="bumpbtn ghost" id="bumpCancel" type="button">Cancelar</button>
 </div></div>
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shName">
