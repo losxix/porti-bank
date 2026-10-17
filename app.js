@@ -772,7 +772,7 @@ function setSituacao(id,v){
   if(v==="preso"){play("jail");toast(nm+" foi para a cadeia!")}else if(v==="ferias"){play("tap");toast(nm+" está de férias 🏖️")}else{play("unlock");toast(nm+" voltou para o jogo!")}
 }
 $("#players").addEventListener("pointerdown",e=>{
-  const row=e.target.closest(".pl");if(!row||!L||!iAmBanker()||row.dataset.actor===L.me)return;
+  const row=e.target.closest(".pl");if(!row||!L||!iAmBanker())return;
   sw={row,id:row.dataset.actor,x:e.clientX,y:e.clientY,dx:0,on:false};
 });
 $("#players").addEventListener("pointermove",e=>{
@@ -841,7 +841,7 @@ function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
   const hiddenBal=p.oculto&&proxy&&L.mesa.esconder!==false;
   const rm=$("#shRemove");rm.hidden=!(boss&&proxy);
-  $("#shJail").hidden=!(boss&&proxy);
+  $("#shJail").hidden=!boss;
   $("#shJail").querySelectorAll("button").forEach(b=>{const v=b.dataset.sit||null;b.hidden=(v===(p.situacao||null))});
   if(!rm.dataset.arm)rm.textContent="Remover "+(p.nome||"")+" da mesa";
   $("#shDot").style.background=colorOf(p.cor).c;
