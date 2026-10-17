@@ -336,6 +336,11 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
 .avatar.sm{width:22px;height:22px;font-size:10px;box-shadow:0 0 0 2px var(--pc,#999)}
 #photoBtn{align-items:center}
 @media(prefers-reduced-motion:reduce){.bars{animation:none}}
+
+/* keep avatars perfectly round wherever they sit */
+.avatar{aspect-ratio:1/1;min-width:30px;max-width:30px;min-height:30px;max-height:30px;align-self:center;padding:0!important;line-height:1}
+.avatar.big{min-width:48px;max-width:48px;min-height:48px;max-height:48px}
+.avatar.sm{min-width:22px;max-width:22px;min-height:22px;max-height:22px}
 </style>
 </head>
 <body>
