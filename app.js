@@ -2017,10 +2017,11 @@ function drawDice(){
   if(slState&&slState.sl&&slState.sl.closest("#b3Land"))return;
   const D=derive(),me=L.me,from=myPos(),pips='<i></i>'.repeat(9);
   let h=`<div class="dhere" style="--tc:${sqColor(from)}"><span class="sw"></span><div><small>Você está em</small><b>${esc(sqName(from))}</b></div><button type="button" data-dc="pick">Mudar</button></div>`;
-  h+=`<div class="dicebox">${DC.sum&&!DC.d1?`<div class="dbig">${DC.sum}</div>`:`<div class="dicepair${DC.rolling?" rolling":""}"><div class="die v${DC.d1}">${pips}</div><div class="die v${DC.d2}">${pips}</div></div>`}
+  h+=`<div class="dicebox"><div class="dicepair${DC.rolling?" rolling":""}"><div class="die v${DC.d1}">${pips}</div><div class="die v${DC.d2}">${pips}</div></div>
     ${DC.sum&&!DC.rolling&&DC.d1?`<div class="dsum">${DC.d1&&DC.d2?`${DC.d1} + ${DC.d2} = `:""}${DC.sum}${DC.d1&&DC.d1===DC.d2?" · dupla!":""}</div>`:""}
     <button class="btn" type="button" data-dc="roll"${DC.rolling?" disabled":""}>${DC.sum?"Rolar de novo":"Rolar os dados"}</button></div>`;
-  h+=`<div class="dnums"><h4>Ou toque no que saiu nos dados da mesa</h4><div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dn="${n}" aria-pressed="${DC.sum===n&&!DC.d1}">${n}</button>`).join("")}</div></div>`;
+  const row=k=>`<div class="dnrow"><span>${k}º dado</span><div class="dsix">${[1,2,3,4,5,6].map(n=>`<button type="button" data-dk="${k}" data-dv="${n}" aria-pressed="${!DC.rolling&&DC["d"+k]===n}">${n}</button>`).join("")}</div></div>`;
+  h+=`<div class="dnums"><h4>Ou marque o que saiu nos dados da mesa</h4>${row(1)}${row(2)}</div>`;
   if(DC.sum&&!DC.rolling){
     const li=landInfo(from,DC.sum),q=li.sq;
     let title=sqName(li.to),sub="",info="",acts="";
@@ -2064,7 +2065,7 @@ function landDo(k){
 }
 $("#b3Land").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
-  if(b.dataset.dn){DC={d1:0,d2:0,sum:+b.dataset.dn,rolling:false};play("tap");drawDice();return}
+  if(b.dataset.dk){if(DC.rolling)return;DC["d"+b.dataset.dk]=+b.dataset.dv;DC.sum=DC.d1&&DC.d2?DC.d1+DC.d2:0;play("tap");drawDice();return}
   const k=b.dataset.dc;if(!k)return;
   if(k==="roll"){
     if(DC.rolling)return;DC.rolling=true;DC.sum=0;play("tap");let n=0;
