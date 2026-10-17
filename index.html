@@ -344,6 +344,12 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
 
 /* iPhone: keep the logo clear of the glass blur at the top edge */
 body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
+
+/* ranking: the round photo never gets clipped */
+.pl .nm{overflow:visible;padding:4px 0 4px 4px}
+.pl .nm .avatar{flex-shrink:0;margin-right:2px}
+.nmtxt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.claim button .avatar,.chips button .avatar,.rq .avatar{flex-shrink:0}
 </style>
 </head>
 <body>
