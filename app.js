@@ -1089,6 +1089,12 @@ function rKey(r){r=String(r||"");const k=r.split(":")[0].trim();return k==="Cond
 function rIcon(r){r=rKey(r);if(r==="Passou pela partida")return `<span class="rbadge" style="--rc:#FFD12B"><svg class="ric go" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-orbit"/></svg></span>`;const m=RMETA[r];return m?`<span class="rbadge"><svg class="ric" viewBox="0 0 24 24" aria-hidden="true"><path d="${m.d}"/></svg></span>`:""}
 function rStyle(r){const m=RMETA[rKey(r)];return m?` style="--rc:${m.c}"`:""}
 const REASONS={pay:["Aluguel","Compra","Imposto","Construção","Sorte/Revés"],recv:["Sorte/Revés","Venda ao banco","Hipoteca","Prêmio"],salary:[],set:[]};
+/* these only happen with the bank, never between players */
+const BANK_ONLY=["Imposto","Construção","Sorte/Revés"];
+function reasonsNow(){
+  const r=REASONS[SH.kind]||[];
+  return SH.kind==="pay"&&(SH.nfc||SH.to!=="bank")?r.filter(x=>!BANK_ONLY.includes(x)):r;
+}
 function quickValues(){
   const s=L.mesa.saldo_inicial,p=L.mesa.salario;
   if(s>=1e6||p>=1e5)return[1000,10000,45000,100000,250000,300000];
@@ -1130,10 +1136,12 @@ function drawSheet(){
   document.querySelectorAll("#shTabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind)));
   $("#shToWrap").hidden=SH.kind!=="pay"||SH.nfc;
   $("#calcToggle").hidden=SH.kind!=="pay";if(SH.kind!=="pay")closeCalc();
-  $("#shReasonBtn").hidden=!REASONS[SH.kind].length||SH.nfc;
+  const RS=reasonsNow();
+  if(SH.note&&REASONS[SH.kind]&&REASONS[SH.kind].includes(SH.note)&&!RS.includes(SH.note))SH.note="";
+  $("#shReasonBtn").hidden=!RS.length||SH.nfc;
   $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":SH.kind==="recv"?"Quanto vem do banco":"Valor";
   $("#shMore").hidden=!shMore;$("#shMoreBtn").setAttribute("aria-expanded",String(shMore));
-  $("#shReasonWrap").hidden=!(shWhy||SH.note||SH.nfc)||!REASONS[SH.kind].length;
+  $("#shReasonWrap").hidden=!(shWhy||SH.note||SH.nfc)||!RS.length;
   $("#shReasonBtn").setAttribute("aria-expanded",String(!$("#shReasonWrap").hidden));
   $("#shReasonBtn").innerHTML=SH.note?`<span class="rtag"${rStyle(SH.note)}>${rIcon(SH.note)}${esc(SH.note)}</span>`:"Adicionar motivo";
   $("#shHint").hidden=SH.kind!=="set"&&!(SH.kind==="recv"&&!boss);
@@ -1153,7 +1161,7 @@ function drawSheet(){
   const rc=$("#shTo"),sl=rc.scrollLeft;
   rc.innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button type="button" data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}" aria-label="${esc(x.nome)}"><span class="ring">${x.id==="bank"?bankAv:avatar(x)}</span><span class="nm">${esc(x.id==="bank"?"Banco":shortName(x.nome))}</span></button>`).join("");
   rc.scrollLeft=sl;
-  $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button type="button" class="rchip" data-note="${esc(r)}" aria-pressed="${SH.note===r}"${rStyle(r)}>${rIcon(r)}${esc(r)}</button>`).join("");
+  $("#shReason").innerHTML=RS.map(r=>`<button type="button" class="rchip" data-note="${esc(r)}" aria-pressed="${SH.note===r}"${rStyle(r)}>${rIcon(r)}${esc(r)}</button>`).join("");
   const amt=parseAmt($("#shAmount").value),has=$("#shAmount").value!=="";
   $("#shClear").hidden=!has;$("#shClear").parentElement.classList.toggle("empty",!has);
   const go=$("#shGo"),an=p.nome||"?",warn=$("#shWarn");
@@ -1292,7 +1300,7 @@ $("#shGo").onclick=()=>{
   if(SH.kind==="pay"){
     if(!(amt>0&&SH.to))return;
     const to=SH.to==="bank"?null:SH.to;
-    r=lancar(a,to,amt,SH.note);msg=(proxy?an+" pagou ":"Pago: ")+money(amt)+" para "+nameOf(to,D);snd="pay";
+    r=lancar(a,to,amt,to&&BANK_ONLY.includes(SH.note)?"":SH.note);msg=(proxy?an+" pagou ":"Pago: ")+money(amt)+" para "+nameOf(to,D);snd="pay";
   }else if(SH.kind==="recv"){
     if(!(amt>0))return;
     r=lancar(null,a,amt,SH.note);msg=(proxy?an+" recebeu ":"Recebido: ")+money(amt);snd="recv";
