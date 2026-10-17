@@ -1580,7 +1580,7 @@ function drawCards(){
   $("#cdHint").textContent=boss?"Segure uma carta e arraste até quem comprou · toque no nome para ver as cartas":"Quer comprar? Segure uma carta livre e arraste até você. O banqueiro autoriza · toque no nome para ver as cartas";
   if(people.length){
     if(cdOpen&&!D.P[cdOpen])cdOpen=null;
-    $("#cdPpl").innerHTML=people.map(p=>`<button type="button" class="cdp${cdOpen===p.id?" open":""}" data-drop="${esc(p.id)}" aria-expanded="${cdOpen===p.id}" style="--pc2:${colorOf(p.cor).c}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} cartas</span></button>`).join("");
+    $("#cdPpl").innerHTML=people.map(p=>`<button type="button" class="cdp${cdOpen===p.id?" open":""}" data-drop="${esc(p.id)}" aria-expanded="${cdOpen===p.id}" style="--pc2:${colorOf(p.cor).c}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} ${count(p.id)===1?"carta":"cartas"}</span></button>`).join("");
     drawOwned(D);
   }
   if(cdFilter!=="all"&&cdFilter!=="free"&&cdFilter!=="mine"&&!D.P[cdFilter])cdFilter="all";
@@ -1936,7 +1936,7 @@ function drawBoard3d(){
   $("#b3dBoard").innerHTML=h;
   /* legend */
   const ppl=playersArr(D),cnt=id=>Object.values(D.Tit).filter(t=>t.dono===id).length,free=Object.keys(CARDS).filter(id=>!(D.Tit[id]||{}).dono).length;
-  $("#b3dLegend").innerHTML=`<div><button type="button" class="b3lp" data-hl="" aria-pressed="${!b3.hl}" style="--oc:#FFD12B"><span>Todos<small>28 cartas</small></span></button><button type="button" class="b3lp" data-hl="free" aria-pressed="${b3.hl==="free"}" style="--oc:#7ee08a"><span>Livres<small>${free} no banco</small></span></button>${ppl.map(p=>`<button type="button" class="b3lp" data-hl="${esc(p.id)}" aria-pressed="${b3.hl===p.id}" style="--oc:${colorOf(p.cor).c}">${avatar(p)}<span>${esc(shortName(p.nome))}<small>${cnt(p.id)} cartas</small></span></button>`).join("")}</div>`;
+  $("#b3dLegend").innerHTML=`<div><button type="button" class="b3lp" data-hl="" aria-pressed="${!b3.hl}" style="--oc:#FFD12B"><span>Todos<small>28 cartas</small></span></button><button type="button" class="b3lp" data-hl="free" aria-pressed="${b3.hl==="free"}" style="--oc:#7ee08a"><span>Livres<small>${free} no banco</small></span></button>${ppl.map(p=>`<button type="button" class="b3lp" data-hl="${esc(p.id)}" aria-pressed="${b3.hl===p.id}" style="--oc:${colorOf(p.cor).c}">${avatar(p)}<span>${esc(shortName(p.nome))}<small>${cnt(p.id)} ${cnt(p.id)===1?"carta":"cartas"}</small></span></button>`).join("")}</div>`;
   b3cam();
 }
 function b3full(){return !$("#b3d").hidden}
