@@ -90,24 +90,45 @@ function actx(){
   if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.onstatechange=()=>{soundReady=ac.state==="running";drawSnd()}}catch(e){}}
   return ac;
 }
+/* iPhone: after the app goes to the background (or another app takes the
+   audio — a call, dictation, a notification), the old sound engine can come
+   back "running" but silent, and resume() can't fix it. So a sound engine
+   that has been through the background is thrown away and a fresh one is
+   made on the next tap, which iOS always lets play. */
+let acStale=false,resumeT=null,resumeAt=0;
+/* a sound asked for right after a tap waits for the engine to wake instead of being dropped */
+const canPlay=a=>!!a&&(a.state==="running"||(a.state!=="closed"&&Date.now()-resumeAt<1200));
+function freshSound(){
+  const old=ac;ac=null;soundReady=false;longBus=null;sfxBus=null;
+  if(old){try{old.onstatechange=null;old.close()}catch(e){}}
+}
 function wakeSound(){
+  if(acStale){acStale=false;freshSound()}
   const a=actx();if(!a)return;
   if(a.state!=="running"){
+    resumeAt=Date.now();
     try{const p=a.resume();if(p&&p.then)p.then(()=>{soundReady=a.state==="running";drawSnd()}).catch(()=>{})}catch(e){}
     try{const b=a.createBuffer(1,1,22050),s=a.createBufferSource();s.buffer=b;s.connect(a.destination);s.start(0)}catch(e){}
+    /* still asleep a moment later: start over on the next tap */
+    clearTimeout(resumeT);resumeT=setTimeout(()=>{if(ac===a&&a.state!=="running")acStale=true;drawSnd()},500);
   }
   soundReady=a.state==="running";
 }
 ["pointerdown","touchend","keydown"].forEach(ev=>document.addEventListener(ev,wakeSound,{passive:true,capture:true}));
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){soundReady=false}drawSnd()});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){soundReady=false;if(ac)acStale=true}
+  drawSnd();
+});
+window.addEventListener("pageshow",e=>{if(e.persisted&&ac){acStale=true;soundReady=false;drawSnd()}});
+window.addEventListener("pagehide",()=>{if(ac){acStale=true;soundReady=false}});
 function tone(f,t0,dur,type,vol,f2){
-  const a=actx();if(!a||a.state!=="running")return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;
+  const a=actx();if(!canPlay(a))return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;
   o.type=type||"sine";o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+dur);
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol||.15,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g).connect(sfxBus||a.destination);o.start(t);o.stop(t+dur+.05);
 }
 function noise(t0,dur,vol,ftype,freq){
-  const a=actx();if(!a||a.state!=="running")return;const b=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);
+  const a=actx();if(!canPlay(a))return;const b=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
   const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();f.type=ftype||"highpass";f.frequency.value=freq||3000;g.gain.value=vol;
   s.buffer=b;s.connect(f).connect(g).connect(sfxBus||a.destination);s.start(a.currentTime+t0);
@@ -189,7 +210,7 @@ const LONG_SFX={vacay3d:1,back3d:1,vacay4:1,back4:1,vacay5:1,back5:1};
 function stopSfx(){const b=longBus;longBus=null;const a=ac;if(!b||!a)return;try{b.gain.setTargetAtTime(0,a.currentTime,.05);setTimeout(()=>{try{b.disconnect()}catch(e){}},400)}catch(e){}}
 function play(k){
   if(soundOn)try{wakeSound();
-    if(LONG_SFX[k]&&ac&&ac.state==="running"){stopSfx();longBus=ac.createGain();longBus.connect(ac.destination);sfxBus=longBus;try{SFX[k]()}finally{sfxBus=null}}
+    if(LONG_SFX[k]&&canPlay(ac)){stopSfx();longBus=ac.createGain();longBus.connect(ac.destination);sfxBus=longBus;try{SFX[k]()}finally{sfxBus=null}}
     else SFX[k]()}catch(e){sfxBus=null}
   try{if(navigator.vibrate)navigator.vibrate(k==="err"?[40,40,40]:k==="ask"?[60,60,60]:k==="pay"?25:12)}catch(e){}
 }
