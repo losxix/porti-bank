@@ -496,6 +496,8 @@ create table if not exists public.pb_titulos (
   primary key (mesa, carta),
   constraint pb_tit_casas_ck check (casas between 0 and 5)
 );
+-- Jogador pediu para comprar; o banqueiro autoriza (ou recusa).
+alter table public.pb_titulos add column if not exists pedido uuid references public.pb_jogadores(id);
 alter table public.pb_cartas  enable row level security;
 alter table public.pb_titulos enable row level security;
 revoke insert, update, delete, truncate on public.pb_cartas, public.pb_titulos from anon, authenticated;
@@ -539,15 +541,26 @@ begin
     if not exists (select 1 from pb_jogadores where id = p_para and mesa = p_mesa and not removido) then raise exception 'Jogador não encontrado.'; end if;
     update pb_titulos set oferta = p_para, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
 
+  elsif p_acao = 'pedir' then
+    if t.dono is not null then raise exception '% já tem dono.', c.nome; end if;
+    if t.pedido is not null and t.pedido <> p_por then raise exception 'Outra pessoa já pediu %.', c.nome; end if;
+    update pb_titulos set pedido = p_por, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+
   elsif p_acao = 'recusar' then
-    if not (v_boss or t.oferta = p_por) then raise exception 'Sem permissão.'; end if;
-    update pb_titulos set oferta = null, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    if not (v_boss or t.oferta = p_por or t.pedido = p_por) then raise exception 'Sem permissão.'; end if;
+    if v_boss then
+      update pb_titulos set oferta = null, pedido = null, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    else
+      update pb_titulos set oferta = case when oferta = p_por then null else oferta end,
+                            pedido = case when pedido = p_por then null else pedido end,
+                            atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    end if;
 
   elsif p_acao = 'comprar' then
     v_dono := coalesce(p_para, p_por);
     if t.dono is not null then raise exception '% já tem dono.', c.nome; end if;
     if not (v_boss or (t.oferta = p_por and v_dono = p_por)) then raise exception 'Essa carta não foi oferecida para você.'; end if;
-    update pb_titulos set dono = v_dono, oferta = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    update pb_titulos set dono = v_dono, oferta = null, pedido = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
     insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
     values (p_id, p_mesa, v_dono, null, c.preco, left('Compra: ' || c.nome, 40), p_por, now(), 'aprovado');
 
@@ -579,7 +592,7 @@ begin
 
   elsif p_acao = 'devolver' then
     if not v_boss then raise exception 'Só o banqueiro.'; end if;
-    update pb_titulos set dono = null, oferta = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    update pb_titulos set dono = null, oferta = null, pedido = null, casas = 0, hipotecada = false, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
 
   else
     raise exception 'Ação inválida.';

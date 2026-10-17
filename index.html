@@ -937,7 +937,69 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 @keyframes auraUp{0%{transform:translateZ(0);opacity:0}15%{opacity:1}100%{transform:translateZ(40px);opacity:0}}
 .b3t.hip .b3aura::before,.b3t.hip .b3aura i{animation:none;opacity:.22}
 .b3t.hip .b3t.dim .b3aura{display:none}
+/* Safari: name and photo sit clearly above the glow so they never flicker under it */
+.b3t.own .b3in{transform:translateZ(3px)}
+.b3t.own.r1 .b3in{transform:translateZ(3px) rotate(90deg)}
+.b3t.own.r2 .b3in{transform:translateZ(3px) rotate(180deg)}
+.b3t.own.r3 .b3in{transform:translateZ(3px) rotate(-90deg)}
+.b3t.own::before{transform:translateZ(.5px)}
+.b3aura::before{transform:translateZ(1px)}
 @media (prefers-reduced-motion:reduce){.b3aura::before,.b3aura i{animation:none;opacity:.75}.b3aura b{display:none}}
+
+/* ---------- cartas v3: Título de Posse PortiBank (referência) ---------- */
+#cardsSheet{background-color:#FBF5E6;background-image:radial-gradient(circle,#25232920 1px,transparent 1.4px);background-size:16px 16px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #cardsSheet{background-color:#1c1b22;background-image:radial-gradient(circle,#ffffff14 1px,transparent 1.4px)}}
+:root[data-theme="dark"] #cardsSheet{background-color:#1c1b22;background-image:radial-gradient(circle,#ffffff14 1px,transparent 1.4px)}
+#cardsSheet .tsh{padding-top:4px;min-height:58px}
+#cardsSheet .tsh .who{gap:12px;align-items:center}
+.cdic{flex:none;width:40px;height:40px;border-radius:10px;background:#B48CFF;border:2px solid #252329;box-shadow:2px 3px 0 #252329;display:grid;place-items:center}
+.cdic svg{width:23px;height:23px;fill:#fff;stroke:#252329;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.cdic svg path{fill:none}
+#cdTitle{font-family:var(--display);font-weight:800;font-size:23px!important;letter-spacing:-1.1px;line-height:1.05}
+#cdSub{font-family:var(--mono);font-weight:500;font-size:10.5px!important;letter-spacing:.1px;margin-top:5px!important}
+#cdClose{width:42px;height:42px;border:2px solid #252329;background:#fff;color:#252329;box-shadow:2px 3px 0 #252329}
+#cdFilter{gap:9px;padding:2px 2px 8px}
+#cdFilter button{min-height:31px;padding:0 17px;border:2px solid #252329;border-radius:12px;background:#fff;color:#252329;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:-.45px;box-shadow:2px 3px 0 #252329}
+#cdFilter button[aria-pressed=true]{background:#FFD12B;color:#252329}
+#cdFilter button .avatar{margin-left:-11px}
+#cdGroups .cdgrid{gap:13px 10px}
+.mcard.pc{display:flex;flex-direction:column;align-items:stretch;padding:0 0 9px;background:#fff!important;color:#252329;border:2px solid #252329!important;border-radius:12px!important;box-shadow:3px 4px 0 #252329!important;overflow:hidden;text-align:left;font-family:var(--body);min-width:0}
+.pc .mtop{position:relative;display:flex;align-items:center;justify-content:space-between;width:auto;margin:0;padding:0 9px 0 10px;height:19px;border-radius:0;background:var(--gc);color:#fff;font-size:7.4px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;text-align:left;font-family:var(--body)}
+.pc .mtop i{position:static;font-style:normal;font-family:var(--display);font-size:8.6px;font-weight:800;letter-spacing:-.2px;color:#fff}
+.pc .mhead{position:relative;z-index:1;display:flex;align-items:flex-start;gap:7px;padding:7px 8px 0 8px}
+.pc .mico{flex:none;width:42px;height:42px;border-radius:7px;overflow:hidden;background:color-mix(in oklab,var(--gc) 20%,#fff)}
+.pc.acao .mico{background:#E6EEF8}
+.pc .mico svg{display:block;width:100%;height:100%}
+.pc .mname{flex:1 1 auto;min-width:0;padding-top:3px}
+.pc .mname b{display:block;font-family:var(--display);font-weight:800;font-size:var(--nf);line-height:1.02;letter-spacing:-.065em;color:#17161c;overflow-wrap:normal;word-break:keep-all;overflow:hidden}
+.pc .mname small{display:block;margin-top:2px;padding-top:1px;font-size:8.4px;font-weight:600;line-height:1.3;color:#6b675f;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pc .mflag{flex:none;width:26px;height:19px;margin-top:1px;border:1.6px solid #252329;border-radius:4px;overflow:hidden;background:#fff;box-shadow:1.5px 2px 0 #252329}
+.pc .mflag svg{display:block;width:100%;height:100%}
+.pc .mglobe{position:absolute;right:-17px;top:58px;width:64px;height:64px;pointer-events:none}
+.pc .mglobe svg{width:100%;height:100%;fill:none;stroke:#ECE8DF;stroke-width:3.4}
+.pc .mlbl{position:relative;margin:9px 9px 3px;font-size:6.9px;font-weight:800;letter-spacing:.55px;text-transform:uppercase;color:#4a4740}
+.pc .mprice{position:relative;align-self:flex-start;min-width:60%;margin:0 9px;padding:2px 9px 1px;background:#FFD12B;color:#17161c;border:2px solid #252329;border-radius:6px;box-shadow:2px 2.5px 0 #252329;font-family:var(--mono);font-weight:600;font-size:13.5px;letter-spacing:-.4px;line-height:1.35;text-align:left;white-space:nowrap}
+.pc .mfoot{position:relative;display:flex;align-items:center;gap:5px;margin:9px 8px 0 9px;padding-top:7px;border-top:1px solid #E9E5DB;min-height:15px}
+.pc .mown{display:flex;align-items:center;justify-content:flex-start;gap:4px;min-width:0;min-height:0;flex:1 1 auto;font-size:7.6px;font-weight:600;color:#3a3833}
+.pc .mown>i{flex:none;width:7px;height:7px;border-radius:50%;background:#2E9E4A}
+.pc .mown.m-off>i{background:#E9A90C}.pc .mown.m-req>i{background:#E8641E}
+.pc .mown>span,.pc .mown>b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#252329}
+.pc .mown b{font-weight:800;color:#252329}
+.pc .mown .avatar{width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;max-width:14px!important;max-height:14px!important;flex:0 0 14px!important;font-size:7px!important;border-width:1.5px!important}
+.pc .msep{flex:none;width:1px;height:12px;background:#E2DED4}
+.pc .mhouses{display:flex;align-items:center;justify-content:flex-end;gap:2px;flex:none;min-height:0}
+.pc .mhouses small{font-size:7.1px;font-weight:600;color:#6b675f;margin-right:2px}
+.pc .mhouses i{display:block;width:10.5px;height:10.5px;border:0!important;border-radius:0;background:none!important}
+.pc .mhouses i svg{display:block;width:100%;height:100%;fill:none;stroke:#252329;stroke-width:1.5;stroke-linejoin:round}
+.pc .mhouses i.on svg{fill:#3DAA4A}
+.pc .mhouses b{font-family:var(--mono);font-size:8px;font-weight:600;color:#252329}
+.pc .mhouses .condo{display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border:1.5px solid #252329;border-radius:5px;background:#E0582F;color:#fff;font-size:7.2px;font-weight:800}
+.pc .mhouses .condo svg{width:9px;height:9px;fill:none;stroke:#fff;stroke-width:1.7;stroke-linejoin:round}
+.mcard.pc.mine{outline:3px solid #FFD12B;outline-offset:2px}
+.mcard.pc.hip .mprice{background:#E2DDD1}
+.mcard.pc.hip .mico,.mcard.pc.hip .mflag{filter:grayscale(.85)}
+.pc .mhip{z-index:2;top:auto;bottom:40px}
+.carddrag{width:172px}.carddrag .mcard.pc{width:172px}
 
 /* ---------- cartas de cada pessoa (banqueiro) ---------- */
 .cdp{-webkit-appearance:none;appearance:none;background:none;color:inherit;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -958,6 +1020,9 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .cdoe{margin:0;padding:0 12px;font-size:12.5px;color:var(--muted)}
 body.cdragging .cdown{border-style:dashed}
 body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(in oklab,var(--pc2) 32%,transparent);transform:scale(1.02);transition:transform .12s,background .12s}
+.oreq{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--ink)!important;font-size:15px!important}
+.oreq b{font-weight:800}
+.obtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @keyframes cdoIn{from{opacity:0;transform:translateY(-6px)}}
 </style>
 <link rel="stylesheet" href="porti-status.css">
@@ -1126,8 +1191,8 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
   <div class="tfoot"><div class="warn" id="shWarn"></div><button class="btn" id="shGo" type="button" disabled>Pagar</button></div>
 </div>
 <div class="sheet tsheet" id="cardsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="cdTitle">
-  <div class="sheet-h tsh"><div class="who"><div style="min-width:0"><b id="cdTitle">Cartas do jogo</b><small id="cdSub"></small></div></div><button class="xbtn" id="cdClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
-  <div class="cddrop" id="cdDrop" hidden><span class="cdhint">Segure uma carta e arraste até quem comprou · toque no nome para ver as cartas</span><div class="cdppl" id="cdPpl"></div><div class="cdown" id="cdOwn" hidden></div></div>
+  <div class="sheet-h tsh"><div class="who"><span class="cdic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="6.5" width="11" height="14" rx="2" transform="rotate(-10 9 13.5)"/><rect x="8.5" y="3.5" width="11" height="14" rx="2"/><path d="M11.5 8h5M14 8v6"/></svg></span><div style="min-width:0"><b id="cdTitle">Cartas do jogo</b><small id="cdSub"></small></div></div><button class="xbtn" id="cdClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+  <div class="cddrop" id="cdDrop" hidden><span class="cdhint" id="cdHint"></span><div class="cdppl" id="cdPpl"></div><div class="cdown" id="cdOwn" hidden></div></div>
   <div class="tbody" id="cdBody">
     <div class="cdboard" id="cdBoardHost"><button class="b3exp" id="b3Expand" type="button"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Expandir</button></div>
     <div class="fchips" id="cdFilter"></div>
@@ -1206,6 +1271,7 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="vendor/qrcode.js"></script>
+<script src="cards-art.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

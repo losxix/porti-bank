@@ -308,20 +308,22 @@ const CARDS={};
  [27,"IPCC","Painel do Clima",150000,40000,75000],[28,"OMS","Org. Mundial da Saúde",150000,40000,75000]
 ].forEach(([id,nome,pais,preco,mult,hip])=>{CARDS[id]={id,nome,pais,preco,mult,casa:0,hip,acao:true}});
 GRUPOS.forEach(g=>g.ids.forEach(id=>{CARDS[id].g=g.k;CARDS[id].cor=g.c}));
-const blankTit=c=>({carta:c,dono:null,casas:0,hipotecada:false,oferta:null});
+const blankTit=c=>({carta:c,dono:null,casas:0,hipotecada:false,oferta:null,pedido:null});
 /* the same rules the server applies, so the phone shows the result right away */
 function applyTit(Tit,T,op,boss){
   const c=CARDS[op.carta];if(!c)return;
   const t=Tit[op.carta]=Object.assign(blankTit(op.carta),Tit[op.carta]);
   const money=(de,para,valor,motivo)=>{if(T&&!T[op.id])T[op.id]={id:op.id,mesa:L.codigo,de,para,valor,motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:"aprovado",pend:true}};
+  const bossOp=!!op.por&&op.por===banker();
   if(op.acao==="ofertar"){if(!t.dono)t.oferta=op.para}
-  else if(op.acao==="recusar")t.oferta=null;
-  else if(op.acao==="comprar"){if(t.dono)return;const d=op.para||op.por;t.dono=d;t.oferta=null;t.casas=0;t.hipotecada=false;money(d,null,c.preco,("Compra: "+c.nome).slice(0,40))}
+  else if(op.acao==="pedir"){if(!t.dono&&(!t.pedido||t.pedido===op.por))t.pedido=op.por}
+  else if(op.acao==="recusar"){if(bossOp){t.oferta=null;t.pedido=null}else{if(t.oferta===op.por)t.oferta=null;if(t.pedido===op.por)t.pedido=null}}
+  else if(op.acao==="comprar"){if(t.dono)return;const d=op.para||op.por;t.dono=d;t.oferta=null;t.pedido=null;t.casas=0;t.hipotecada=false;money(d,null,c.preco,("Compra: "+c.nome).slice(0,40))}
   else if(op.acao==="construir"){if(!t.dono||c.acao||t.hipotecada||t.casas>=5)return;money(t.dono,null,c.casa,((t.casas===4?"Condomínio: ":"Construção: ")+c.nome).slice(0,40));t.casas++}
   else if(op.acao==="hipotecar"){if(!t.dono||t.hipotecada)return;t.hipotecada=true;money(null,t.dono,c.hip,("Hipoteca: "+c.nome).slice(0,40))}
   else if(op.acao==="resgatar"){if(!t.dono||!t.hipotecada)return;t.hipotecada=false;money(t.dono,null,c.hip,("Fim da hipoteca: "+c.nome).slice(0,40))}
   else if(op.acao==="tirar_casa")t.casas=Math.max(0,t.casas-1);
-  else if(op.acao==="devolver"){t.dono=null;t.oferta=null;t.casas=0;t.hipotecada=false}
+  else if(op.acao==="devolver"){t.dono=null;t.oferta=null;t.pedido=null;t.casas=0;t.hipotecada=false}
 }
 function titOp(carta,acao,para){
   if(!L||!L.me)return;
@@ -374,6 +376,7 @@ async function flush(cur){
     const op=cur.out[0];
     try{await sendOp(op)}
     catch(e){
+      if(op.t==="titulo"&&op.acao==="pedir"&&/inv[aá]lida/i.test(e.message||"")&&L===cur){cur.out.shift();save();toast("Para pedir cartas, o banqueiro precisa rodar o SQL novo no Supabase.");play("err");continue}
       if(e.config&&op.t==="titulo"&&L===cur){cur.out.shift();save();toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");play("err");continue}
       if(e.network||e.config)throw e;
       if(L!==cur)return sent;
@@ -474,8 +477,10 @@ function mergeTit(rows,notify){
   for(const r of rows||[]){
     if(!r||(r.mesa&&r.mesa!==L.codigo)||!CARDS[r.carta])continue;
     const was=L.tit[r.carta]||blankTit(r.carta);
-    L.tit[r.carta]={carta:r.carta,dono:r.dono||null,casas:r.casas||0,hipotecada:!!r.hipotecada,oferta:r.oferta||null};
+    L.tit[r.carta]={carta:r.carta,dono:r.dono||null,casas:r.casas||0,hipotecada:!!r.hipotecada,oferta:r.oferta||null,pedido:r.pedido||null};
     if(notify&&r.oferta===L.me&&was.oferta!==L.me){play("ask");if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
+    if(notify&&was.pedido===L.me&&r.pedido!==L.me&&!was.dono){const c=CARDS[r.carta];if(r.dono===L.me){toast(`O banqueiro autorizou: ${c.nome} é sua!`);play("go");setTimeout(flashCard,50)}else if(!r.dono||r.dono!==L.me){toast(`O banqueiro recusou seu pedido de ${c.nome}`);play("err")}}
+    if(notify&&r.pedido&&r.pedido!==was.pedido&&!r.dono&&iAmBanker()&&r.pedido!==L.me){play("ask");if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
   }
 }
 async function syncNow(){
@@ -1437,21 +1442,44 @@ if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="funct
 window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
 /* ================= CARTAS (UI) ================= */
 var cdOpen=null,cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
+const HOUSE_SVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 7.4 8 2.4l5.8 5v6.2H2.2z"/><path d="M6.4 13.6V10h3.2v3.6"/></svg>';
+const TOWER_SVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 14V6h4v8M7 14V2h6v12M2 14h12"/><path d="M9 5h2M9 8h2M9 11h2"/></svg>';
+const GLOBE_SVG='<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/><ellipse cx="50" cy="50" rx="20" ry="46"/><ellipse cx="50" cy="50" rx="38" ry="46"/><path d="M50 4v92M4 50h92M10 28h80M10 72h80"/></svg>';
 function cardOwnerHTML(t,D){
-  if(t.dono){const p=D.P[t.dono];return `<span class="mown">${p?avatar(p):""}<b>${esc(p?p.nome:"?")}</b></span>`}
-  if(t.oferta){const p=D.P[t.oferta];return `<span class="mown offer">Oferecida a ${esc(p?shortName(p.nome):"?")}</span>`}
-  return `<span class="mown free">Livre no banco</span>`;
+  if(t.dono){const p=D.P[t.dono];return `<span class="mown owned">${p?avatar(p,"sm"):""}<b>${t.dono===L.me?"Você":esc(p?shortName(p.nome):"?")}</b></span>`}
+  if(t.oferta){const p=D.P[t.oferta];return `<span class="mown m-off"><i></i><span>Oferta: <b>${esc(p?shortName(p.nome):"?")}</b></span></span>`}
+  if(t.pedido){const p=D.P[t.pedido];return `<span class="mown m-req"><i></i><span>${t.pedido===L.me?"<b>Você pediu</b>":`Pedido: <b>${esc(p?shortName(p.nome):"?")}</b>`}</span></span>`}
+  return `<span class="mown m-free"><i></i><span>Livre no banco</span></span>`;
 }
 function housesHTML(c,t){
-  if(c.acao)return `<span class="mhouses"><span style="font-size:11px;font-weight:700;color:var(--muted)">Dados × ${short(c.mult)}</span></span>`;
-  if(t.casas>=5)return `<span class="mhouses"><span class="condo">CONDOMÍNIO</span></span>`;
-  return `<span class="mhouses">${[1,2,3,4].map(i=>`<i class="${t.casas>=i?"on":""}"></i>`).join("")}</span>`;
+  if(c.acao)return `<span class="mhouses"><small>Dados ×</small><b>${short(c.mult)}</b></span>`;
+  if(t.casas>=5)return `<span class="mhouses"><span class="condo">${TOWER_SVG}Condomínio</span></span>`;
+  return `<span class="mhouses"><small>Casas</small>${[1,2,3,4].map(i=>`<i class="${t.casas>=i?"on":""}">${HOUSE_SVG}</i>`).join("")}</span>`;
 }
+/* card names: biggest size (≤17px) that fits in up to 2 lines without breaking a word,
+   measured on the real element so it works with whatever font the phone shows */
+const fitCache={};let fontsDone=false;
+function fitNames(root){
+  (root||document).querySelectorAll(".pc .mname b").forEach(b=>{
+    const n=b.textContent;
+    if(fitCache[n]){b.style.fontSize=fitCache[n]+"px";return}
+    if(!b.clientWidth)return;
+    let f=17;b.style.fontSize=f+"px";
+    while(f>9&&(b.scrollWidth>b.clientWidth+.5||b.offsetHeight>f*2.2+1)){f-=.5;b.style.fontSize=f+"px"}
+    if(fontsDone)fitCache[n]=f;
+  });
+}
+try{document.fonts.ready.then(()=>{fontsDone=true;if(L&&!$("#cardsSheet").hidden)drawCards()})}catch(e){fontsDone=true}
 function miniCard(c,t,D){
-  return `<button type="button" class="mcard${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}${t.hipotecada?" hip":""}" data-card="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor}">
-    <span class="mtop">TÍTULO DE POSSE<i>${c.id}</i></span>
-    <span class="mband"><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></span>
-    <span class="mbody"><span class="mprice">${money(c.preco)}</span>${cardOwnerHTML(t,D)}${housesHTML(c,t)}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
+  const nf=15;
+  const art=window.PB_ART||{icon:()=>"",flag:()=>""};
+  return `<button type="button" class="mcard pc${c.acao?" acao":""}${t.dono&&t.dono===L.me?" mine":""}${t.hipotecada?" hip":""}${!t.dono&&(t.oferta||t.pedido)?" pend":""}" data-card="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor};--nf:${nf}px">
+    <span class="mtop"><span>Título de posse</span><i>#${String(c.id).padStart(2,"0")}</i></span>
+    <span class="mhead"><span class="mico">${art.icon(c.id)}</span><span class="mname"><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></span><span class="mflag">${art.flag(c)}</span></span>
+    <span class="mglobe">${GLOBE_SVG}</span>
+    <span class="mlbl">Valor de compra</span>
+    <span class="mprice">${money(c.preco)}</span>
+    <span class="mfoot">${cardOwnerHTML(t,D)}${!t.dono&&(t.oferta||t.pedido)?"":`<span class="msep"></span>${housesHTML(c,t)}`}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
 }
 function openCards(filter){
   closeSheets();cdFilter=filter||"all";cdOpen=null;
@@ -1463,9 +1491,10 @@ function drawCards(){
   const Tit=id=>D.Tit[id]||blankTit(id);
   const count=id=>Object.values(D.Tit).filter(t=>t.dono===id).length;
   const free=Object.keys(CARDS).filter(id=>!Tit(+id).dono).length;
-  $("#cdSub").textContent=`${free} livres no banco · ${28-free} com jogadores`;
-  $("#cdDrop").hidden=!boss;
-  if(boss){
+  $("#cdSub").textContent=`${free} livres no banco • ${28-free} com jogadores`;
+  $("#cdDrop").hidden=!people.length;
+  $("#cdHint").textContent=boss?"Segure uma carta e arraste até quem comprou · toque no nome para ver as cartas":"Quer comprar? Segure uma carta livre e arraste até você. O banqueiro autoriza · toque no nome para ver as cartas";
+  if(people.length){
     if(cdOpen&&!D.P[cdOpen])cdOpen=null;
     $("#cdPpl").innerHTML=people.map(p=>`<button type="button" class="cdp${cdOpen===p.id?" open":""}" data-drop="${esc(p.id)}" aria-expanded="${cdOpen===p.id}" style="--pc2:${colorOf(p.cor).c}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} cartas</span></button>`).join("");
     drawOwned(D);
@@ -1475,16 +1504,15 @@ function drawCards(){
     +people.filter(p=>p.id!==L.me).map(p=>`<button type="button" data-cf="${esc(p.id)}" aria-pressed="${cdFilter===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("");
   $("#cdFilter").innerHTML=chips;
   const ok=t=>cdFilter==="all"||(cdFilter==="free"&&!t.dono)||(cdFilter==="mine"&&t.dono===L.me)||t.dono===cdFilter;
-  const html=GRUPOS.map(g=>{
-    const cs=g.ids.filter(id=>ok(Tit(id)));if(!cs.length)return"";
-    return `<div class="cdgroup" style="--gc:${g.c}"><h3><i></i>${g.n}</h3><div class="cdgrid">${cs.map(id=>miniCard(CARDS[id],Tit(id),D)).join("")}</div></div>`;
-  }).join("");
+  const cs=GRUPOS.flatMap(g=>g.ids).filter(id=>ok(Tit(id)));
+  const html=cs.length?`<div class="cdgrid">${cs.map(id=>miniCard(CARDS[id],Tit(id),D)).join("")}</div>`:"";
   $("#cdGroups").innerHTML=html||'<p class="empty">Nenhuma carta aqui.</p>';
+  fitNames($("#cdGroups"));
   if(!b3.ptrs.size&&!b3full())drawBoard3d();
 }
 /* banqueiro: toque no nome da pessoa para ver (ou esconder) as cartas dela */
 function ownChip(c,t){
-  const info=!t.dono?"Esperando confirmar":t.hipotecada?"Hipotecada":c.acao?`Dados × ${short(c.mult)}`:t.casas>=5?"Condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:money(c.preco);
+  const info=!t.dono?(t.oferta?"Esperando confirmar":"Esperando o banqueiro"):t.hipotecada?"Hipotecada":c.acao?`Dados × ${short(c.mult)}`:t.casas>=5?"Condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:money(c.preco);
   return `<button type="button" class="cdo${t.hipotecada?" hip":""}${t.dono?"":" pend"}" data-ocard="${c.id}" style="--gc:${c.acao?"#3a3a46":c.cor}"><span class="cdob">${esc(c.nome)}</span><span class="cdom">${info}</span></button>`;
 }
 function drawOwned(D){
@@ -1493,7 +1521,7 @@ function drawOwned(D){
   box.dataset.drop=p.id;
   const old=box.querySelector(".cdorow"),sl=old?old.scrollLeft:0;
   const order=GRUPOS.flatMap(g=>g.ids);
-  const ids=Object.keys(CARDS).map(Number).filter(id=>{const t=D.Tit[id];return t&&(t.dono===p.id||(!t.dono&&t.oferta===p.id))}).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const ids=Object.keys(CARDS).map(Number).filter(id=>{const t=D.Tit[id];return t&&(t.dono===p.id||(!t.dono&&(t.oferta===p.id||t.pedido===p.id)))}).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
   const own=ids.filter(id=>D.Tit[id].dono===p.id).length,pend=ids.length-own;
   box.style.setProperty("--pc2",colorOf(p.cor).c);
   box.innerHTML=`<div class="cdoh"><b>Cartas de ${esc(shortName(p.nome))}</b><span>${own} ${own===1?"carta":"cartas"}${pend?` · ${pend} esperando`:""}</span></div>`+
@@ -1523,15 +1551,20 @@ function cdEnd(drop){
   document.querySelectorAll("[data-drop].over").forEach(x=>x.classList.remove("over"));
   cdDragJust=true;setTimeout(()=>cdDragJust=false,350);
   if(drop){
-    const c=CARDS[d.card],D=derive(),p=D.P[drop];if(!p)return;
-    titOp(d.card,"ofertar",drop);play("pay");
-    toast(`${c.nome} oferecida a ${p.nome}. Esperando confirmar.`);
+    const c=CARDS[d.card],D=derive(),p=D.P[drop],t=D.Tit[d.card]||blankTit(d.card);if(!p){drawCards();return}
+    if(!iAmBanker()){
+      if(drop!==L.me){toast("Arraste a carta até você. Só o banqueiro vende para outras pessoas.");play("err")}
+      else if(t.pedido===L.me)toast(`Você já pediu ${c.nome}. Esperando o banqueiro.`);
+      else{titOp(d.card,"pedir");play("ask");toast(`Pedido enviado: ${c.nome} por ${money(c.preco)}. Esperando o banqueiro autorizar.`)}
+    }else if(t.pedido&&t.pedido===drop){titOp(d.card,"comprar",drop);play("go");toast(`Compra autorizada: ${c.nome} para ${p.nome}`)}
+    else{titOp(d.card,"ofertar",drop);play("pay");toast(`${c.nome} oferecida a ${p.nome}. Esperando confirmar.`)}
   }
   drawCards();
 }
 $("#cdGroups").addEventListener("pointerdown",e=>{
-  const el=e.target.closest("[data-card]");if(!el||!iAmBanker())return;
+  const el=e.target.closest("[data-card]");if(!el||!L||!L.me)return;
   const id=+el.dataset.card,t=derive().Tit[id];if(t&&t.dono)return;
+  if(!iAmBanker()&&t&&t.pedido&&t.pedido!==L.me)return;
   const x0=e.clientX,y0=e.clientY;
   clearTimeout(cdHold);
   cdHold=setTimeout(()=>{
@@ -1575,6 +1608,7 @@ function drawCard(){
   let h="";
   /* who has it */
   if(owner)h+=`<div class="ccown">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""}<small>${t.hipotecada?"Hipotecada · não cobra aluguel":c.acao?"Dono da ação":t.casas>=5?"Com condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:"Sem casas"}</small></div></div>`;
+  else if(t.pedido&&!t.oferta){const p=D.P[t.pedido];h+=`<div class="ccown">${p?avatar(p):""}<div>${t.pedido===me?"Você pediu esta carta":"Pedida por "+esc(p?p.nome:"?")}<small>Esperando o banqueiro autorizar a compra de ${money(c.preco)}</small></div></div>`}
   else if(t.oferta){const p=D.P[t.oferta];h+=`<div class="ccown">${p?avatar(p):""}<div>Oferecida a ${esc(p?p.nome:"?")}<small>Esperando confirmar a compra de ${money(c.preco)}</small></div></div>`}
   else h+=`<div class="ccown"><div>Livre no banco<small>Preço ${money(c.preco)}</small></div></div>`;
   /* values */
@@ -1589,6 +1623,9 @@ function drawCard(){
   const slide=(act,label,sub,tone,extra)=>`<div class="slide ${tone||""}" data-sl="${act}"${extra||""}><div class="sl-fill"></div><span class="sl-txt">${label}${sub?`<small>${sub}</small>`:""}</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`;
   const tile=(title,body)=>`<div class="ctile"><h4>${title}</h4>${body}</div>`;
   if(!t.dono){
+    if(t.pedido&&boss&&t.pedido!==me)a+=tile(`Pedido de ${esc(shortName(nameOf(t.pedido,D)))}`,slide("autorizar",`Arraste para autorizar`,`${esc(shortName(nameOf(t.pedido,D)))} paga ${money(c.preco)} ao banco`,"buy")+`<button class="btn ghost small" data-cc="recusar" type="button">Recusar o pedido</button>`);
+    else if(t.pedido===me&&!boss)a+=tile("Seu pedido",`<p class="ccnote">O banqueiro precisa autorizar. Quando ele autorizar, ${money(c.preco)} sai do seu saldo.</p><button class="btn ghost small" data-cc="recusar" type="button">Cancelar meu pedido</button>`);
+    else if(!boss&&!t.pedido&&t.oferta!==me)a+=tile("Quero comprar",slide("pedir","Arraste para pedir a compra",`${money(c.preco)} · o banqueiro autoriza`,"buy"));
     if(t.oferta===me)a+=tile("Comprar esta carta",slide("comprar","Arraste para comprar",money(c.preco),"buy")+`<button class="btn ghost small" data-cc="recusar" type="button">Não quero</button>`);
     if(boss){
       const ppl=playersArr(D);
@@ -1637,6 +1674,8 @@ function ccDo(k,to){
     toast(`${nameOf(ccPayer,D)} pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});
     ccPayer=null;ccDice=0;drawCard();return;
   }
+  if(k==="pedir"){titOp(c.id,"pedir");play("ask");toast(`Pedido enviado. Esperando o banqueiro autorizar.`);drawCard();return}
+  if(k==="autorizar"){if(!t.pedido)return;const who=t.pedido;titOp(c.id,"comprar",who);play("go");toast(`Compra autorizada: ${c.nome} para ${nameOf(who,D)}`);drawCard();return}
   if(k==="ofertar"){if(!to)return;titOp(c.id,"ofertar",to);play("pay");toast(`${c.nome} oferecida a ${nameOf(to,D)}. Esperando confirmar.`);drawCard();return}
   titOp(c.id,k);
   if(k==="comprar"){play("go");toast(`Você comprou ${c.nome}!`);flashCard()}
@@ -1680,14 +1719,27 @@ document.addEventListener("pointerup",slEnd);document.addEventListener("pointerc
 document.addEventListener("touchmove",e=>{if(slState)e.preventDefault()},{passive:false});
 
 /* someone offered me a card: confirm on my phone */
-let offerShown=null;
+let offerShown=null,offerKind=null;const reqSnooze=new Set();
 function drawOffer(D){
   const box=$("#offerBox");
   const mine=L&&L.me?Object.values(D.Tit).find(t=>t.oferta===L.me&&!t.dono):null;
-  if(!mine){box.hidden=true;offerShown=null;return}
+  if(!mine){
+    const req=L&&L.me&&iAmBanker()?Object.values(D.Tit).find(t=>t.pedido&&!t.dono&&t.pedido!==L.me&&D.P[t.pedido]&&!reqSnooze.has(t.carta+":"+t.pedido)):null;
+    if(!req){box.hidden=true;offerShown=null;offerKind=null;return}
+    const c=CARDS[req.carta],p=D.P[req.pedido],key="r"+c.id+":"+req.pedido;
+    if(offerShown===key&&!box.hidden)return;
+    offerShown=key;offerKind="pedido";
+    const bal=balances(D)[req.pedido];
+    $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
+      <div class="obody"><p class="oreq">${avatar(p)}<span><b>${esc(p.nome)}</b> quer comprar esta carta</span></p><div class="oprice">${money(c.preco)}</div>
+      <p>Saldo de ${esc(shortName(p.nome))}: ${money(bal||0)}${(bal||0)<c.preco?" · vai ficar negativo":""}</p>
+      <div class="slide buy" data-sl="autorizar"><div class="sl-fill"></div><span class="sl-txt">Arraste para autorizar</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>
+      <div class="obtns"><button class="btn ghost small" data-of="recusar" type="button">Recusar</button><button class="btn ghost small" data-of="depois" type="button">Depois</button></div></div>`;
+    box.hidden=false;return;
+  }
   const c=CARDS[mine.carta];
   if(offerShown===c.id&&!box.hidden)return;
-  offerShown=c.id;
+  offerShown=c.id;offerKind="oferta";
   $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
     <div class="obody"><p>O banqueiro está te vendendo essa carta.</p><div class="oprice">${money(c.preco)}</div>
     <p>${c.acao?`Aluguel: soma dos dados × ${money(c.mult)}`:`Aluguel sem casa: ${money(c.al[0])}`}</p>
@@ -1696,6 +1748,16 @@ function drawOffer(D){
   box.hidden=false;
 }
 function offerDo(k){
+  if(offerKind==="pedido"){
+    const D=derive(),t=Object.values(D.Tit).find(x=>x.pedido&&!x.dono&&("r"+x.carta+":"+x.pedido)===offerShown);
+    $("#offerBox").hidden=true;offerShown=null;
+    if(!t){render();return}
+    const c=CARDS[t.carta];
+    if(k==="autorizar"){titOp(t.carta,"comprar",t.pedido);play("go");toast(`Compra autorizada: ${c.nome} para ${nameOf(t.pedido,D)}`)}
+    else if(k==="recusar"){titOp(t.carta,"recusar");play("undo");toast(`Pedido de ${nameOf(t.pedido,D)} recusado`)}
+    else{reqSnooze.add(t.carta+":"+t.pedido);play("tap");toast("O pedido fica na carta. Abra a carta para autorizar depois.");render()}
+    return;
+  }
   const t=Object.values(derive().Tit).find(x=>x.oferta===L.me&&!x.dono);if(!t)return;
   const c=CARDS[t.carta];
   titOp(t.carta,k);$("#offerBox").hidden=true;
