@@ -620,6 +620,10 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 #plBoss .jailrow .btn{display:flex;align-items:center;justify-content:center;gap:2px}
 #plBoss[hidden]{display:none}
 body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
+.step{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;transition:background .15s,transform .1s}
+.step.holding{background:color-mix(in oklab,var(--accent) 35%,var(--surface));transform:scale(.97)}
+.step.turbo{background:var(--accent);color:var(--accent-ink)}
+.amtsub.empty{min-height:8px;margin:0}
 </style>
 </head>
 <body>

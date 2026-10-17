@@ -968,7 +968,7 @@ function drawSheet(){
   $("#shTabs").hidden=SH.kind==="set";
   document.querySelectorAll("#shTabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind)));
   $("#shToWrap").hidden=SH.kind!=="pay";
-  $("#calcToggle").hidden=SH.kind==="set";
+  $("#calcToggle").hidden=SH.kind!=="pay";if(SH.kind!=="pay")closeCalc();
   $("#shReasonBtn").hidden=!REASONS[SH.kind].length;
   $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":SH.kind==="recv"?"Quanto vem do banco":"Valor";
   $("#shMore").hidden=!shMore;$("#shMoreBtn").setAttribute("aria-expanded",String(shMore));
@@ -994,7 +994,7 @@ function drawSheet(){
   rc.scrollLeft=sl;
   $("#shReason").innerHTML=REASONS[SH.kind].map(r=>`<button type="button" data-note="${esc(r)}" aria-pressed="${SH.note===r}">${esc(r)}</button>`).join("");
   const amt=parseAmt($("#shAmount").value),has=$("#shAmount").value!=="";
-  $("#shClear").hidden=!has;
+  $("#shClear").hidden=!has;$("#shClear").parentElement.classList.toggle("empty",!has);
   const go=$("#shGo"),an=p.nome||"?",warn=$("#shWarn");
   go.className="btn";warn.textContent="";
   if(SH.kind==="pay"){
@@ -1010,6 +1010,28 @@ function drawSheet(){
     if(has&&d!==0)warn.textContent=(d>0?"O banco paga ":"O banco recebe ")+money(Math.abs(d));
   }
 }
+/* press and hold −/+: repeats, speeds up, and after a while jumps 10× */
+(function(){
+  let t=null,held=false,btn=null,n=0,t0=0;
+  function bump(){
+    const step=Math.abs(+btn.dataset.add)||1000,sign=+btn.dataset.add<0?-1:1,el=Date.now()-t0;
+    const mult=el>2600?10:1;
+    setAmount(Math.max(0,parseAmt($("#shAmount").value)+sign*step*mult));drawSheet();
+    if(n%2===0)play("tap");n++;
+    btn.classList.toggle("turbo",mult>1);
+    t=setTimeout(bump,Math.max(45,170-n*12));
+  }
+  function stop(){clearTimeout(t);t=null;if(btn)btn.classList.remove("holding","turbo");btn=null}
+  ["#shMinus","#shPlus"].forEach(id=>{
+    const b=$(id);
+    b.addEventListener("pointerdown",e=>{stop();btn=b;held=false;n=0;b.classList.add("holding");
+      t=setTimeout(()=>{held=true;t0=Date.now();bump()},380)});
+    ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,stop));
+    b.addEventListener("contextmenu",e=>e.preventDefault());
+    /* a hold already changed the value: swallow the click that follows */
+    b.addEventListener("click",e=>{if(held){held=false;e.stopPropagation();e.preventDefault()}},true);
+  });
+})();
 $("#shMoreBtn").onclick=()=>{shMore=!shMore;play("tap");drawSheet()};
 $("#shReasonBtn").onclick=()=>{shWhy=$("#shReasonWrap").hidden;play("tap");drawSheet()};
 /* passou pela partida for any player (player menu) */
