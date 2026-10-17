@@ -1472,7 +1472,8 @@ function ownChip(c,t){
 }
 function drawOwned(D){
   const box=$("#cdOwn"),p=cdOpen&&D.P[cdOpen];
-  if(!p){box.hidden=true;box.innerHTML="";return}
+  if(!p){box.hidden=true;box.innerHTML="";box.removeAttribute("data-drop");return}
+  box.dataset.drop=p.id;
   const old=box.querySelector(".cdorow"),sl=old?old.scrollLeft:0;
   const order=GRUPOS.flatMap(g=>g.ids);
   const ids=Object.keys(CARDS).map(Number).filter(id=>{const t=D.Tit[id];return t&&(t.dono===p.id||(!t.dono&&t.oferta===p.id))}).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
@@ -1502,7 +1503,7 @@ function cdEnd(drop){
   const d=cdDrag;cdDrag=null;
   document.body.classList.remove("cdragging");$("#cardGhost").hidden=true;$("#cardGhost").innerHTML="";
   if(d.el)d.el.classList.remove("lifting");
-  document.querySelectorAll(".cdp.over").forEach(x=>x.classList.remove("over"));
+  document.querySelectorAll("[data-drop].over").forEach(x=>x.classList.remove("over"));
   cdDragJust=true;setTimeout(()=>cdDragJust=false,350);
   if(drop){
     const c=CARDS[d.card],D=derive(),p=D.P[drop];if(!p)return;
@@ -1529,7 +1530,7 @@ document.addEventListener("pointermove",e=>{
   if(!cdDrag)return;
   const g=$("#cardGhost");g.style.left=e.clientX+"px";g.style.top=e.clientY+"px";
   const over=document.elementFromPoint(e.clientX,e.clientY);const tgt=over&&over.closest("[data-drop]");
-  document.querySelectorAll(".cdp.over").forEach(x=>{if(x!==tgt)x.classList.remove("over")});
+  document.querySelectorAll("[data-drop].over").forEach(x=>{if(x!==tgt)x.classList.remove("over")});
   if(tgt&&!tgt.classList.contains("over")){tgt.classList.add("over");play("tap")}
 });
 document.addEventListener("pointerup",e=>{
