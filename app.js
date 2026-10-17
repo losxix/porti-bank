@@ -1193,10 +1193,10 @@ function drawSheet(){
   $("#calcToggle").hidden=SH.kind!=="pay";if(SH.kind!=="pay")closeCalc();
   const RS=reasonsNow();
   if(SH.note&&REASONS[SH.kind]&&REASONS[SH.kind].includes(SH.note)&&!RS.includes(SH.note))SH.note="";
-  $("#shReasonBtn").hidden=!RS.length||SH.nfc;
+  $("#shReasonBtn").hidden=true;
   $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":SH.kind==="recv"?"Quanto vem do banco":"Valor";
   $("#shMore").hidden=!shMore;$("#shMoreBtn").setAttribute("aria-expanded",String(shMore));
-  $("#shReasonWrap").hidden=!(shWhy||SH.note||SH.nfc)||!RS.length;
+  $("#shReasonWrap").hidden=!RS.length;
   $("#shReasonBtn").setAttribute("aria-expanded",String(!$("#shReasonWrap").hidden));
   $("#shReasonBtn").innerHTML=SH.note?`<span class="rtag"${rStyle(SH.note)}>${rIcon(SH.note)}${esc(SH.note)}</span>`:"Adicionar motivo";
   $("#shHint").hidden=SH.kind!=="set"&&!(SH.kind==="recv"&&!boss);
@@ -1214,7 +1214,7 @@ function drawSheet(){
   const others=playersArr(D).filter(x=>x.id!==a);
   const bankAv='<span class="bankav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg></span>';
   const rc=$("#shTo"),sl=rc.scrollLeft;
-  rc.innerHTML=[{id:"bank",nome:"Banco"},...others].map(x=>`<button type="button" data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}" aria-label="${esc(x.nome)}"><span class="ring">${x.id==="bank"?bankAv:avatar(x)}</span><span class="nm">${esc(x.id==="bank"?"Banco":shortName(x.nome))}</span></button>`).join("");
+  rc.innerHTML=[{id:"bank",nome:"Porti Bank"},...others].map(x=>`<button type="button" data-to="${esc(x.id)}" aria-pressed="${SH.to===x.id}" aria-label="${esc(x.nome)}"><span class="ring">${x.id==="bank"?'<span class="bankav pblogo"><img src="logo.webp" alt=""></span>':avatar(x)}</span><span class="nm">${esc(x.id==="bank"?"Porti Bank":shortName(x.nome))}</span></button>`).join("");
   rc.scrollLeft=sl;
   $("#shReason").innerHTML=RS.map(r=>`<button type="button" class="rchip" data-note="${esc(r)}" aria-pressed="${SH.note===r}"${rStyle(r)}>${rIcon(r)}${esc(r)}</button>`).join("");
   const amt=parseAmt($("#shAmount").value),has=$("#shAmount").value!=="";
@@ -1225,7 +1225,7 @@ function drawSheet(){
     go.textContent=amt?`Aproximar para enviar ${money(amt)}`:"Digite o valor";go.disabled=!(amt>0);go.className="btn nfcgo";
     if(amt>bal&&!hiddenBal&&!peek)warn.textContent="Seu saldo fica negativo: "+fmt(bal-amt);
   }else if(SH.kind==="pay"){
-    const toName=SH.to==="bank"?"o Banco":nameOf(SH.to,D);
+    const toName=SH.to==="bank"?"o Porti Bank":nameOf(SH.to,D);
     go.textContent=amt&&SH.to?(proxy?`${an} paga ${money(amt)} para ${toName}`:`Pagar ${money(amt)} para ${toName}`):SH.to?`Digite o valor para ${toName}`:"Escolha para quem";
     go.disabled=!(amt>0&&SH.to);
     if(amt>bal&&!hiddenBal&&!(a===L.me&&peek))warn.textContent=(proxy?"O saldo de "+an+" fica negativo: ":"Seu saldo fica negativo: ")+fmt(bal-amt);
@@ -1323,7 +1323,7 @@ $("#sheet").addEventListener("click",e=>{
 
 /* calculator: dice × value per point */
 let calcDice=0;
-function closeCalc(){$("#calc").hidden=true;$("#calcToggle").setAttribute("aria-expanded","false");$("#calcToggle").textContent="Calcular aluguel"}
+function closeCalc(){$("#calc").hidden=true;$("#calcToggle").setAttribute("aria-expanded","false")}
 function drawCalc(){
   $("#calcDice").innerHTML=Array.from({length:11},(_,i)=>i+2).map(n=>`<button type="button" data-dice="${n}" aria-pressed="${calcDice===n}">${n}</button>`).join("");
   const big=L.mesa.saldo_inicial>=1e6||L.mesa.salario>=1e5;
@@ -1331,18 +1331,18 @@ function drawCalc(){
   const v=parseAmt($("#calcVal").value);
   const ok=calcDice>0&&v>0;
   $("#calcExpr").textContent=ok?`${calcDice} × ${money(v)} = ${money(calcDice*v)}`:calcDice?`${calcDice} × ?`:"Escolha os dados e o valor";
-  $("#calcUse").disabled=!ok;
+  if(ok){const tot=calcDice*v;if(!SH.note&&reasonsNow().includes("Aluguel"))SH.note="Aluguel";if(parseAmt($("#shAmount").value)!==tot){setAmount(tot)}drawSheet()}
 }
 $("#calcToggle").onclick=()=>{
   const open=$("#calc").hidden;
-  $("#calc").hidden=!open;$("#calcToggle").setAttribute("aria-expanded",String(open));$("#calcToggle").textContent=open?"Fechar calculadora":"Calcular aluguel";
+  $("#calc").hidden=!open;$("#calcToggle").setAttribute("aria-expanded",String(open));
   if(open)drawCalc();play("tap");
 };
 $("#calc").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   if(b.dataset.dice){calcDice=+b.dataset.dice;play("tap");drawCalc()}
   else if(b.dataset.cv){$("#calcVal").value=(+b.dataset.cv).toLocaleString("pt-BR");play("tap");drawCalc()}
-  else if(b.id==="calcUse"){const v=parseAmt($("#calcVal").value);setAmount(calcDice*v);closeCalc();play("recv");drawSheet()}
+  else if(b.id==="calcUse"){closeCalc();play("tap");drawSheet()}
 });
 $("#calcVal").addEventListener("input",e=>{fmtInput(e.target);drawCalc()});
 

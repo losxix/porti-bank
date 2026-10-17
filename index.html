@@ -1025,6 +1025,21 @@ body.cdragging .cdp{border-color:color-mix(in oklab,var(--edge) 35%,transparent)
 .scanx{position:absolute;left:20px;right:20px;width:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);background:#fff8e8;color:#252329}
 @media (prefers-reduced-motion:reduce){.scanline{animation:none;top:50%}}
 
+/* ---------- pagar: calculadora no valor e motivos sempre à mostra ---------- */
+.bankav.pblogo{background:#252329;overflow:hidden;display:grid;place-items:center}
+.bankav.pblogo img{width:92%;height:auto;max-width:none}
+.amthead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.amthead h2{margin:0}
+.calcic{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px 0 9px;border-radius:12px;border:2px solid var(--edge);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:800;box-shadow:1px 2px 0 var(--shadow);cursor:pointer}
+.calcic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.calcic[aria-expanded="true"]{background:var(--accent);color:#252329;border-color:#252329}
+.calcic[hidden]{display:none}
+.tsheet .calc{margin-top:10px;animation:calcIn .18s ease-out}
+.calch small{display:block;margin-top:3px;font-size:12px;color:var(--muted);font-weight:600}
+@keyframes calcIn{from{opacity:0;transform:translateY(-6px)}}
+.rwrap{margin-top:6px;padding-top:12px;border-top:1px solid color-mix(in oklab,var(--edge) 12%,transparent)}
+.rwrap .opt{font-weight:600;letter-spacing:.2px;text-transform:none;color:var(--muted)}
+
 /* ---------- cartas de cada pessoa (banqueiro) ---------- */
 .cdp{-webkit-appearance:none;appearance:none;background:none;color:inherit;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .cdp.open{background:color-mix(in oklab,var(--pc2) 22%,transparent);border-style:solid;border-color:var(--pc2)}
@@ -1204,21 +1219,21 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
   <div class="tbody" id="shBody">
     <div class="seg" id="shTabs"><button data-kind="pay" type="button">Pagar</button><button data-kind="recv" type="button">Receber</button></div>
     <div id="shToWrap"><h2>Para quem</h2><div class="rcpts" id="shTo"></div></div>
-    <div id="shAmtWrap"><h2 id="shAmtLbl">Valor</h2>
+    <div id="shAmtWrap"><div class="amthead"><h2 id="shAmtLbl">Valor</h2><button class="calcic" id="calcToggle" type="button" aria-expanded="false" aria-label="Calculadora de aluguel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8 7h8v3H8z"/><path d="M8.5 13.5h.01M12 13.5h.01M15.5 13.5h.01M8.5 17h.01M12 17h.01M15.5 17h.01"/></svg><span>Calculadora</span></button></div>
       <div class="amtrow"><button class="step" id="shMinus" type="button" data-add="-1000">−1 mil</button><input class="amount" id="shAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="$ 0"><button class="step" id="shPlus" type="button" data-add="1000">+1 mil</button></div>
       <div class="amtsub"><span id="shAmtNote"></span><button class="mini" id="shClear" type="button" data-add="0">Limpar</button></div>
-      <div class="quick" id="shQuick"></div>
-      <button class="morebtn" id="shMoreBtn" type="button" aria-expanded="false">Mais valores</button>
-      <div class="morebox" id="shMore" hidden><h3>Somar</h3><div class="chips" id="shMorePlus"></div><h3>Subtrair</h3><div class="chips" id="shMoreMinus"></div></div>
-      <div class="extras"><button class="extra" id="calcToggle" type="button" aria-expanded="false">Calcular aluguel</button><button class="extra" id="shReasonBtn" type="button" aria-expanded="false">Adicionar motivo</button></div>
       <div class="calc" id="calc" hidden>
-        <h2 style="margin:0">Quanto deu nos dados?</h2>
+        <div class="calch"><h2 style="margin:0">Calculadora de aluguel</h2><small>Soma dos dados × valor por ponto</small></div>
         <div class="dice" id="calcDice"></div>
         <label for="calcVal">Valor para cada ponto<input class="inp num" id="calcVal" inputmode="numeric" placeholder="Ex.: 40.000" autocomplete="off"></label>
         <div class="chips" id="calcQuick"></div>
-        <div class="calcres"><span id="calcExpr">Escolha os dados e o valor</span><button class="btn small" id="calcUse" type="button" disabled>Usar</button></div>
+        <div class="calcres"><span id="calcExpr">Escolha os dados e o valor</span><button class="btn small" id="calcUse" type="button">Pronto</button></div>
       </div>
-      <div id="shReasonWrap" hidden><h2>Motivo</h2><div class="chips" id="shReason"></div></div>
+      <div class="quick" id="shQuick"></div>
+      <button class="morebtn" id="shMoreBtn" type="button" aria-expanded="false">Mais valores</button>
+      <div class="morebox" id="shMore" hidden><h3>Somar</h3><div class="chips" id="shMorePlus"></div><h3>Subtrair</h3><div class="chips" id="shMoreMinus"></div></div>
+      <button class="extra" id="shReasonBtn" type="button" hidden aria-expanded="true"></button>
+      <div id="shReasonWrap" class="rwrap" hidden><h2>Motivo <span class="opt">(opcional)</span></h2><div class="chips" id="shReason"></div></div>
     </div>
     <p class="hint" id="shHint" hidden></p>
   </div>
