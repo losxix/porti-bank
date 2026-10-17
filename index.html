@@ -368,7 +368,7 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
       <form class="panel" id="setupForm">
         <h2 style="margin:0">Criar uma mesa nova</h2>
         <div class="two">
-          <label for="sStart">Saldo inicial<input class="inp num" id="sStart" inputmode="numeric" value="2.558.000"></label>
+          <label for="sStart">Saldo inicial<input class="inp num" id="sStart" inputmode="numeric" value="2.528.000"></label>
           <label for="sSalary">Passou pela partida<input class="inp num" id="sSalary" inputmode="numeric" value="200.000"></label>
         </div>
         <p class="hint">Valores da edição Mundo. Quem abre o banco vira o banqueiro e aprova o dinheiro que sai do banco.</p>
@@ -416,7 +416,7 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
       <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
         <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
       <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="tx" id="txList"></div></div>
-      <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button></div>
+      <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Mudar os valores da mesa</button></div>
       <div class="foot">
         <span class="muted num" style="font-size:12.5px" id="rules"></span>
         <span style="display:flex;gap:16px"><button class="link" id="switchBtn">Trocar cartão</button><button class="link" id="leaveBtn" style="color:var(--neg)">Sair da mesa</button></span>
@@ -447,6 +447,7 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
   <p class="hint" id="shHint" hidden></p>
   <div class="warn" id="shWarn"></div>
   <button class="btn" id="shGo" disabled>Pagar</button>
+  <button class="btn ghost" id="shRemove" hidden>Remover da mesa</button>
 </div>
 <div class="sheet" id="invSheet" hidden role="dialog" aria-modal="true" aria-labelledby="invTitle">
   <div class="sheet-h"><b id="invTitle">Chamar a mesa</b><button class="link" id="invClose">Fechar</button></div>
@@ -455,6 +456,13 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
   <div class="bigcode" id="invCode"></div>
   <div class="linkbox" id="invLink"></div>
   <button class="btn ghost" id="copyBtn">Copiar link</button>
+</div>
+<div class="sheet" id="valSheet" hidden role="dialog" aria-modal="true" aria-labelledby="valTitle">
+  <div class="sheet-h"><b id="valTitle">Valores da mesa</b><button class="link" id="valClose">Cancelar</button></div>
+  <p class="muted" style="font-size:14px">Muda o saldo inicial de todos e o valor da partida. Os lançamentos já feitos continuam valendo.</p>
+  <label for="vStart">Saldo inicial<input class="inp num" id="vStart" inputmode="numeric"></label>
+  <label for="vSalary">Passou pela partida<input class="inp num" id="vSalary" inputmode="numeric"></label>
+  <button class="btn" id="valSave">Salvar valores</button>
 </div>
 <div class="sheet" id="bankSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bankTitle">
   <div class="sheet-h"><b id="bankTitle">Passar o banco</b><button class="link" id="bankClose">Cancelar</button></div>

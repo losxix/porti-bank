@@ -45,6 +45,7 @@ create table if not exists public.pb_jogadores (
   constraint pb_jogadores_cor_ck  check (cor in ('vermelho','azul','verde','amarelo','roxo','preto','laranja','rosa'))
 );
 create index if not exists pb_jogadores_mesa_idx on public.pb_jogadores (mesa);
+alter table public.pb_jogadores add column if not exists removido boolean not null default false;
 
 create table if not exists public.pb_lancamentos (
   id            uuid primary key,
@@ -289,6 +290,41 @@ begin
 end;
 $$;
 
+-- O banqueiro tira um jogador da mesa (o histórico continua no extrato).
+create or replace function public.pb_remover_jogador(p_id uuid, p_por uuid)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_mesa text;
+begin
+  select mesa into v_mesa from pb_jogadores where id = p_id;
+  if not found then raise exception 'Jogador não encontrado.'; end if;
+  if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = v_mesa) then
+    raise exception 'Só o banqueiro pode remover jogadores.';
+  end if;
+  if p_id = p_por then raise exception 'Passe o banco para outra pessoa antes de sair.'; end if;
+  update pb_jogadores set removido = true, atualizado_em = now() where id = p_id;
+end;
+$$;
+
+-- O banqueiro muda o saldo inicial e o valor da partida da mesa.
+create or replace function public.pb_mesa_valores(p_mesa text, p_por uuid, p_saldo_inicial integer, p_salario integer)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = p_mesa) then
+    raise exception 'Só o banqueiro pode mudar os valores da mesa.';
+  end if;
+  if p_saldo_inicial is null or p_saldo_inicial < 1 or p_saldo_inicial > 1000000000 then raise exception 'Saldo inicial inválido.'; end if;
+  if p_salario is null or p_salario < 0 or p_salario > 1000000000 then raise exception 'Valor da partida inválido.'; end if;
+  update pb_mesas set saldo_inicial = p_saldo_inicial, salario = p_salario, atualizado_em = now() where codigo = p_mesa;
+end;
+$$;
+
 -- Esconde/mostra o saldo do jogador para a mesa. Vale a mudança mais recente.
 create or replace function public.pb_ocultar(p_id uuid, p_oculto boolean, p_quando timestamptz)
 returns void
@@ -313,6 +349,8 @@ revoke all on function public.pb_recusar(uuid, uuid) from public;
 revoke all on function public.pb_estornar(uuid, uuid) from public;
 revoke all on function public.pb_passar_banco(text, uuid, uuid) from public;
 revoke all on function public.pb_ocultar(uuid, boolean, timestamptz) from public;
+revoke all on function public.pb_remover_jogador(uuid, uuid) from public;
+revoke all on function public.pb_mesa_valores(text, uuid, integer, integer) from public;
 grant execute on function public.pb_criar_mesa(integer, integer) to anon, authenticated;
 grant execute on function public.pb_entrar(uuid, text, text, text) to anon, authenticated;
 grant execute on function public.pb_lancar(uuid, text, uuid, uuid, integer, text, uuid, timestamptz) to anon, authenticated;
@@ -321,6 +359,8 @@ grant execute on function public.pb_recusar(uuid, uuid) to anon, authenticated;
 grant execute on function public.pb_estornar(uuid, uuid) to anon, authenticated;
 grant execute on function public.pb_passar_banco(text, uuid, uuid) to anon, authenticated;
 grant execute on function public.pb_ocultar(uuid, boolean, timestamptz) to anon, authenticated;
+grant execute on function public.pb_remover_jogador(uuid, uuid) to anon, authenticated;
+grant execute on function public.pb_mesa_valores(text, uuid, integer, integer) to anon, authenticated;
 
 -- 4) Tempo real: avisa os celulares na hora -----------------------------
 do $$

@@ -163,6 +163,7 @@ function derive(){
   for(const op of L.out){
     if(op.t==="entrar"&&!P[op.id])P[op.id]={id:op.id,nome:op.nome,cor:op.cor,oculto:false,criado_em:op.em,pend:true};
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
+    else if(op.t==="remover"&&P[op.id])P[op.id].removido=true;
     else if(op.t==="lancar"&&!T[op.id])T[op.id]={id:op.id,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:op.status||"aprovado",pend:true};
     else if(op.t==="estornar"&&T[op.id]&&!T[op.id].estornado_em&&T[op.id].status!=="recusado"){
       if(T[op.id].status==="pendente"){T[op.id].status="recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
@@ -179,11 +180,11 @@ function balances(D){
   for(const t of Object.values(D.T)){if(!counts(t))continue;if(t.de&&t.de in b)b[t.de]-=t.valor;if(t.para&&t.para in b)b[t.para]+=t.valor}
   return b;
 }
-const playersArr=D=>Object.values(D.P).sort((a,b)=>tms(a.criado_em)-tms(b.criado_em));
+const playersArr=D=>Object.values(D.P).filter(p=>!p.removido).sort((a,b)=>tms(a.criado_em)-tms(b.criado_em));
 const txArr=D=>Object.values(D.T).sort((a,b)=>tms(b.feito_em)-tms(a.feito_em));
 function nameOf(id,D){if(!id)return"Banco";const p=(D||derive()).P[id];return p?p.nome:"?"}
 function tableAverage(D,exceptId){
-  const b=balances(D);const ids=Object.keys(D.P).filter(id=>id!==exceptId);
+  const b=balances(D);const ids=Object.keys(D.P).filter(id=>id!==exceptId&&!D.P[id].removido);
   if(!ids.length)return L.mesa.saldo_inicial;
   return Math.round(ids.reduce((s,id)=>s+b[id],0)/ids.length/1000)*1000;
 }
@@ -200,6 +201,8 @@ function confirmOp(op){
   else if((op.t==="aprovar"||op.t==="recusar")&&L.lanc[op.id]&&L.lanc[op.id].status==="pendente"){L.lanc[op.id].status=op.t==="aprovar"?"aprovado":"recusado";L.lanc[op.id].aprovado_por=op.por}
   else if(op.t==="ocultar"&&L.jog[op.id]){L.jog[op.id].oculto=op.oculto;L.jog[op.id].oculto_em=op.em}
   else if(op.t==="banco"&&L.mesa){L.mesa.banqueiro=op.para}
+  else if(op.t==="remover"&&L.jog[op.id]){L.jog[op.id].removido=true}
+  else if(op.t==="valores"&&L.mesa){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
 }
 function sendOp(op){
   if(op.t==="entrar")return API.rpc("pb_entrar",{p_id:op.id,p_mesa:L.codigo,p_nome:op.nome,p_cor:op.cor});
@@ -209,6 +212,8 @@ function sendOp(op){
   if(op.t==="recusar")return API.rpc("pb_recusar",{p_id:op.id,p_por:op.por});
   if(op.t==="ocultar")return API.rpc("pb_ocultar",{p_id:op.id,p_oculto:op.oculto,p_quando:op.em});
   if(op.t==="banco")return API.rpc("pb_passar_banco",{p_mesa:L.codigo,p_de:op.por,p_para:op.para});
+  if(op.t==="remover")return API.rpc("pb_remover_jogador",{p_id:op.id,p_por:op.por});
+  if(op.t==="valores")return API.rpc("pb_mesa_valores",{p_mesa:L.codigo,p_por:op.por,p_saldo_inicial:op.saldo,p_salario:op.salario});
   return Promise.resolve();
 }
 async function flush(cur){
@@ -232,6 +237,7 @@ function mergeMesa(m){
   if(!m||m.codigo!==L.codigo)return;
   const was=L.mesa&&L.mesa.banqueiro;
   L.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null};
+  for(const op of L.out)if(op.t==="valores"){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
   if(firstSync&&was&&m.banqueiro&&was!==m.banqueiro&&L.me){
     const D=derive();
     if(m.banqueiro===L.me){toast("Agora você é o banqueiro da mesa.");play("go")}
@@ -246,6 +252,7 @@ function mergeRows(kind,rows,notify){
     if(kind==="mesa"){mergeMesa(r);continue}
     if(!r.id||(r.mesa&&r.mesa!==L.codigo))continue;
     if(kind==="jog"){
+      if(notify&&r.id===L.me&&r.removido&&!(L.jog[r.id]||{}).removido){toast("O banqueiro tirou seu cartão da mesa.");play("err")}
       if(notify&&!L.jog[r.id]&&!L.out.some(o=>o.t==="entrar"&&o.id===r.id))joined.push(r);
       L.jog[r.id]={...L.jog[r.id],...r};
     }else{
@@ -404,7 +411,7 @@ function render(){
   if(!L.mesa){show("vWait");$("#waitTitle").textContent="Abrindo a mesa "+L.codigo+"…";return}
   const D=derive();
   const meP=L.me&&D.P[L.me];
-  if(!meP||forceJoin){renderJoin(D);show("vJoin");return}
+  if(!meP||meP.removido||forceJoin){renderJoin(D);show("vJoin");return}
   show("vMain");keepAwake();
   if(!$("#sheet").hidden&&D.P[SH.actor])drawSheet();
   const boss=iAmBanker(),bk=banker();
@@ -444,7 +451,8 @@ function render(){
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
   $("#privSub").textContent=meP.oculto?"Os outros veem $ ••••• no lugar do seu saldo":"Os outros jogadores veem seu saldo no ranking";
   $("#bankText").innerHTML=boss?"<b>Você é o banqueiro.</b> Você aprova o dinheiro que sai do banco para os jogadores.":bk?`Banqueiro da mesa: <b>${esc(nameOf(bk,D))}</b>. Dinheiro do banco só cai depois que ele aprova.`:"Esta mesa ainda não tem banqueiro.";
-  $("#passBankBtn").hidden=!boss||Object.keys(D.P).length<2;
+  $("#passBankBtn").hidden=!boss||playersArr(D).length<2;
+  $("#valBtn").hidden=!boss;
 
   /* ranking */
   const hiddenFor=p=>p.oculto&&p.id!==L.me;
@@ -627,6 +635,29 @@ $("#passBankBtn").onclick=()=>{
   $("#scrim").hidden=false;$("#bankSheet").hidden=false;play("tap");
 };
 $("#bankClose").onclick=closeSheets;
+let rmT;
+$("#shRemove").onclick=e=>{
+  const b=e.currentTarget,a=SH.actor;
+  if(!iAmBanker()||a===L.me)return;
+  if(!b.dataset.arm){b.dataset.arm="1";b.textContent="Toque de novo para remover "+nameOf(a);clearTimeout(rmT);rmT=setTimeout(()=>{delete b.dataset.arm;drawSheet()},4000);play("tap");return}
+  delete b.dataset.arm;clearTimeout(rmT);
+  const nm=nameOf(a);closeSheets();
+  enqueue({t:"remover",id:a,por:L.me,em:nowIso()});play("undo");toast(nm+" saiu da mesa.");
+};
+$("#valBtn").onclick=()=>{
+  $("#vStart").value=L.mesa.saldo_inicial.toLocaleString("pt-BR");$("#vSalary").value=L.mesa.salario.toLocaleString("pt-BR");
+  $("#scrim").hidden=false;$("#valSheet").hidden=false;play("tap");
+};
+["#vStart","#vSalary"].forEach(x=>$(x).addEventListener("input",e=>fmtInput(e.target)));
+$("#valClose").onclick=closeSheets;
+$("#valSave").onclick=()=>{
+  const saldo=parseAmt($("#vStart").value),salario=parseAmt($("#vSalary").value);
+  if(!saldo){toast("Coloque o saldo inicial.");play("err");return}
+  closeSheets();
+  enqueue({t:"valores",saldo,salario,por:L.me,em:nowIso()});
+  L.mesa.saldo_inicial=saldo;L.mesa.salario=salario;render();
+  play("go");toast("Valores da mesa atualizados: início "+money(saldo)+", partida "+money(salario));
+};
 
 /* ---------- invite ---------- */
 const shareLink=()=>location.origin+location.pathname+"#"+L.codigo;
@@ -662,10 +693,12 @@ function openSheet(kind,actor){
   $("#scrim").hidden=false;$("#sheet").hidden=false;
   drawSheet();
 }
-function closeSheets(){$("#scrim").hidden=true;$("#sheet").hidden=true;$("#invSheet").hidden=true;$("#bankSheet").hidden=true}
+function closeSheets(){$("#scrim").hidden=true;["#sheet","#invSheet","#bankSheet","#valSheet"].forEach(s=>$(s).hidden=true)}
 function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
   const hiddenBal=p.oculto&&proxy;
+  const rm=$("#shRemove");rm.hidden=!(boss&&proxy);
+  if(!rm.dataset.arm)rm.textContent="Remover "+(p.nome||"")+" da mesa";
   $("#shDot").style.background=colorOf(p.cor).c;
   $("#shName").textContent=proxy?"Lançando por "+p.nome:"Seu cartão";
   $("#shBal").textContent="Saldo "+(hiddenBal?MASK:fmt(bal));
