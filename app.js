@@ -1019,11 +1019,11 @@ function listenMotion(){
     if(a)mag=Math.hypot(a.x||0,a.y||0,a.z||0);
     else{const g=e.accelerationIncludingGravity;if(!g)return;mag=Math.abs(Math.hypot(g.x||0,g.y||0,g.z||0)-9.81)}
     const jerk=Math.abs(mag-lastMag);lastMag=mag;
-    if(mag>13&&jerk>8)knock();
+    if(mag>7&&jerk>5)knock();
   });
 }
-function knock(){
-  const now=Date.now();if(now-lastKnock<1200)return;lastKnock=now;
+function knock(byTap){
+  const now=Date.now();if(now-lastKnock<(byTap?400:1200))return;lastKnock=now;
   if(!L||!L.me||document.visibilityState!=="visible")return;
   bumpSend(bumpMode?"pay":"any");
   if(bumpMode){$("#bumpTitle").textContent="Procurando o outro celular…";bumpTry()}
@@ -1060,6 +1060,9 @@ function bumpStart(){
 function bumpFail(msg){bumpClose();toast(msg);play("err")}
 function bumpClose(){bumpMode=null;clearTimeout(bumpT);$("#bump").hidden=true}
 $("#aBump").onclick=bumpStart;
+$("#bumpTap").onclick=()=>{knock(true);play("tap");const b=$("#bumpTap");b.classList.remove("hit");void b.offsetWidth;b.classList.add("hit")};
+/* the receiver taps their own card at the same moment: no need to touch the phones */
+$("#card").addEventListener("click",e=>{if(e.target.closest("button,input,label,a"))return;if(!L||!L.me||bumpMode)return;knock(true);flashCard()});
 $("#bumpCancel").onclick=()=>{bumpClose();play("tap")};
 $("#bumpList").onclick=()=>{bumpClose();openSheet("pay")};
 /* the receiver's phone must feel the knock too: ask for the motion sensor on the first tap inside a table */
