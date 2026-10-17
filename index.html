@@ -639,7 +639,18 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 .extra .rtag{font-size:13px;text-decoration:none}
 .extra:has(.rtag){text-decoration:none}
 .rbadge .ric.go{stroke:none;color:#252329;width:18px;height:18px}
+.bumpbox .bumpamt{margin:4px 0 0;font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:-1px;color:var(--ink)}
+.bumpbox .bumpamt small{display:block;font-family:var(--body);font-size:12px;letter-spacing:0;color:var(--muted);font-weight:700;margin-top:2px}
+.bump.ok .bumpbox{animation:bumpOk .5s ease}
+@keyframes bumpOk{40%{transform:scale(1.04)}}
+/* ranking status labels (package icons) */
+.ps-status{margin-left:2px}
+:root[data-theme="dark"] .ps-status,.ps-status{color:#24232b}
+.tfoot .btn.nfcgo{background:#252329;color:#FFD12B;border-color:#252329}
+.tfoot .btn.nfcgo:disabled{background:var(--soft);color:var(--muted)}
 </style>
+<link rel="stylesheet" href="porti-status.css">
+<link rel="stylesheet" href="porti-ferias.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -771,6 +782,7 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 <div class="scrim" id="scrim" hidden></div>
 <div class="bump" id="bump" hidden role="dialog" aria-modal="true"><div class="bumpbox">
   <div class="bumpanim"><span class="ph a"><svg><use href="#pb-phone"/></svg></span><svg class="nfcw"><use href="#i-nfc"/></svg><span class="ph b"><svg><use href="#pb-phone"/></svg></span><span class="wave"></span></div>
+  <p class="bumpamt" id="bumpAmt" hidden></p>
   <h3 id="bumpTitle">Aproxime do celular de quem vai receber</h3>
   <p>Dê um toquezinho de lado no celular da outra pessoa e afaste. Encoste pela lateral, não pela parte de cima. O app dela precisa estar aberto.</p>
   <button class="bumpbtn tapnow" id="bumpTap" type="button" hidden></button>
@@ -858,6 +870,8 @@ body.sheeton .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="vendor/qrcode.js"></script>
+<script>window.PORTI_FERIAS_ASSETS={quadriciclo:"quadriciclo.webp"};</script>
+<script src="porti-ferias.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

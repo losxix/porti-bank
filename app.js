@@ -149,13 +149,28 @@ const SFX={
     tone(90,2.75,.5,"sawtooth",.07,280);tone(180,2.75,.5,"square",.03,560);
     tone(330,3.2,1.5,"sawtooth",.08,60);noise(3.15,1.5,.13,"bandpass",900);noise(3.2,1.1,.05,"highpass",4000)
   },
+  /* quad bike (3.8s): rolls in .25-.95, bag lands 1.2, umbrella pops 1.55, revs 1.5-2.4, leaves 2.45-3.2 */
+  vacay4(){
+    tone(120,.25,.75,"sawtooth",.05,90);noise(.25,.75,.06,"lowpass",600);
+    tone(70,1.2,.18,"sine",.35,45);noise(1.2,.1,.2,"lowpass",900);tone(90,1.32,.12,"sine",.18,50);
+    noise(1.55,.12,.12,"bandpass",2500);tone(900,1.56,.12,"triangle",.06,1500);
+    [1.5,1.62,1.74,1.86,1.98,2.1,2.22].forEach(t=>tone(95,t,.1,"sawtooth",.05,110));
+    tone(110,2.3,.25,"sawtooth",.07,260);
+    tone(340,2.45,.85,"sawtooth",.08,70);noise(2.42,.85,.13,"bandpass",900);noise(2.45,.6,.05,"highpass",4000)
+  },
+  back4(){
+    tone(60,0,.85,"sawtooth",.05,140);noise(0,.85,.09,"bandpass",700);tone(150,.83,.3,"sawtooth",.05,80);
+    noise(1.45,.1,.1,"bandpass",2000);noise(1.6,.12,.1,"bandpass",2500);
+    tone(110,2.25,.15,"sawtooth",.06,240);tone(320,2.37,.8,"sawtooth",.07,70);noise(2.37,.8,.1,"bandpass",900);
+    tone(784,2.95,.12,"triangle",.12);tone(1175,3.05,.3,"triangle",.12)
+  },
   back3d(){tone(70,.25,2.2,"sawtooth",.05,150);noise(.25,2.2,.08,"bandpass",700);tone(150,2.3,.5,"sawtooth",.05,80);tone(440,2.9,.14,"square",.06);tone(554,2.9,.14,"square",.05);tone(440,3.11,.22,"square",.06);tone(554,3.11,.22,"square",.05)},
   back(){tone(260,0,.8,"sawtooth",.06,110);noise(0,.8,.1,"bandpass",800);tone(440,.95,.14,"square",.06);tone(554,.95,.14,"square",.05);tone(440,1.16,.2,"square",.06);tone(554,1.16,.2,"square",.05)},
   /* key turning and the door opening */
   unlock(){noise(0,.03,.18);tone(2200,0,.05,"square",.06);noise(.12,.03,.18);tone(2600,.12,.05,"square",.06);tone(240,.3,.5,"sawtooth",.04,700);noise(.3,.45,.04);[523,659,784].forEach((f,i)=>tone(f,.85+i*.08,.2,"triangle",.11))}
 };
 let sfxBus=null,longBus=null;
-const LONG_SFX={vacay3d:1,back3d:1};
+const LONG_SFX={vacay3d:1,back3d:1,vacay4:1,back4:1};
 function stopSfx(){const b=longBus;longBus=null;const a=ac;if(!b||!a)return;try{b.gain.setTargetAtTime(0,a.currentTime,.05);setTimeout(()=>{try{b.disconnect()}catch(e){}},400)}catch(e){}}
 function play(k){
   if(soundOn)try{wakeSound();
@@ -540,7 +555,7 @@ function render(){
   const max=Math.max(1,...vis.map(p=>bal[p.id]));
   if(sw&&sw.on){swDirty=true}else $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
-    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="jailtag"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-lock"/></svg>preso</span>':p.situacao==="ferias"?'<span class="vactag"><svg class="sticon" viewBox="0 0 72 48"><use href="#pb-car"/></svg>férias</span>':"");
+    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="ps-status ps-preso" data-porti-status="preso" title="Preso"><img src="status-preso.svg" alt="" aria-hidden="true"><span>Preso</span></span>':p.situacao==="ferias"?'<span class="ps-status ps-ferias" data-porti-status="ferias" title="Férias"><img src="status-ferias.svg" alt="" aria-hidden="true"><span>Férias</span></span>':"");
     return `<button class="pl${p.situacao==="preso"?" jailed":p.situacao==="ferias"?" vac":""}" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
       <span class="nm">${avatar(p)}<span class="nmtxt">${esc(p.nome)}</span>${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
@@ -681,6 +696,12 @@ let tripT;
 function tripShow(id,leaving){
   const now=Date.now(),k=id+(leaving?"v":"b");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
   const p=derive().P[id];if(!p)return;
+  if(window.PortiFerias){
+    const foto=p.foto&&/^data:image\//.test(p.foto)?p.foto:"";
+    play(leaving?"vacay4":"back4");
+    (leaving?PortiFerias.sair({nome:p.nome,foto}):PortiFerias.voltar({nome:p.nome,foto})).then(r=>{if(r&&r.reason!=="concluida")stopSfx()});
+    return;
+  }
   const el=$("#trip");
   $("#tripWho").innerHTML=avatar(p,"big");
   $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias!`:`<b>${esc(p.nome)}</b> voltou das férias!`;
@@ -954,12 +975,12 @@ function chipsHTML(){ /* big shortcuts: one row */
 }
 function moreHTML(sign){const v=quickValues();return v.map(x=>`<button type="button" data-add="${sign<0?"-":""}${x}">${sign<0?"−":"+"}${short(x)}</button>`).join("")}
 function setAmount(n){$("#shAmount").value=n?"$ "+n.toLocaleString("pt-BR"):""}
-function openSheet(kind,actor){
+function openSheet(kind,actor,nfc){
   if(L.me&&!iAmBanker()){const me=derive().P[L.me];if(me&&me.situacao){toast(me.situacao==="ferias"?"Você está de férias: só o banqueiro mexe na sua conta.":"Você está na cadeia: só o banqueiro mexe na sua conta.");play("err");return}}
   if(kind==="salary"){closeSheets();doSalary(actor||L.me);return}
   if(kind==="set"&&!iAmBanker())kind="pay";
   closeSheets();
-  SH={kind,actor:actor||L.me,to:kind==="pay"?"bank":null,note:""};
+  SH={kind,actor:actor||L.me,to:kind==="pay"&&!nfc?"bank":null,note:"",nfc:!!(nfc&&kind==="pay")};
   setAmount(0);closeCalc();shMore=false;shWhy=false;
   const step=quickValues()[0];
   $("#shMinus").dataset.add=-step;$("#shMinus").textContent="−"+short(step);
@@ -978,11 +999,11 @@ function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
   const hiddenBal=p.oculto&&proxy&&L.mesa.esconder!==false;
   $("#shAv").innerHTML=avatar(p);
-  $("#shName").textContent=SH.kind==="set"?"Ajustar saldo · "+p.nome:proxy?"Lançando por "+p.nome:"Seu cartão";
+  $("#shName").textContent=SH.nfc?"Pagar por NFC":SH.kind==="set"?"Ajustar saldo · "+p.nome:proxy?"Lançando por "+p.nome:"Seu cartão";
   $("#shBal").textContent="Saldo "+(hiddenBal?MASK:fmt(bal));
-  $("#shTabs").hidden=SH.kind==="set";
+  $("#shTabs").hidden=SH.kind==="set"||SH.nfc;
   document.querySelectorAll("#shTabs button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===SH.kind)));
-  $("#shToWrap").hidden=SH.kind!=="pay";
+  $("#shToWrap").hidden=SH.kind!=="pay"||SH.nfc;
   $("#calcToggle").hidden=SH.kind!=="pay";if(SH.kind!=="pay")closeCalc();
   $("#shReasonBtn").hidden=!REASONS[SH.kind].length;
   $("#shAmtLbl").textContent=SH.kind==="set"?"Saldo correto agora":SH.kind==="recv"?"Quanto vem do banco":"Valor";
@@ -1012,7 +1033,10 @@ function drawSheet(){
   $("#shClear").hidden=!has;$("#shClear").parentElement.classList.toggle("empty",!has);
   const go=$("#shGo"),an=p.nome||"?",warn=$("#shWarn");
   go.className="btn";warn.textContent="";
-  if(SH.kind==="pay"){
+  if(SH.nfc){
+    go.textContent=amt?`Aproximar para enviar ${money(amt)}`:"Digite o valor";go.disabled=!(amt>0);go.className="btn nfcgo";
+    if(amt>bal&&!hiddenBal&&!peek)warn.textContent="Seu saldo fica negativo: "+fmt(bal-amt);
+  }else if(SH.kind==="pay"){
     const toName=SH.to==="bank"?"o Banco":nameOf(SH.to,D);
     go.textContent=amt&&SH.to?(proxy?`${an} paga ${money(amt)} para ${toName}`:`Pagar ${money(amt)} para ${toName}`):SH.to?`Digite o valor para ${toName}`:"Escolha para quem";
     go.disabled=!(amt>0&&SH.to);
@@ -1135,6 +1159,7 @@ $("#calcVal").addEventListener("input",e=>{fmtInput(e.target);drawCalc()});
 
 $("#shGo").onclick=()=>{
   const D=derive(),a=SH.actor,an=nameOf(a,D),proxy=a!==L.me,amt=parseAmt($("#shAmount").value);
+  if(SH.nfc){if(!(amt>0))return;const pend={actor:a,amt,note:SH.note};closeSheets();bumpStart(pend);return}
   if(SH.kind==="recv"&&(D.P[a]||{}).situacao==="preso"){toast(an+" está preso e não recebe do banco.");play("err");return}
   const before=balances(D)[a];
   let r,msg,snd;
@@ -1254,26 +1279,41 @@ function bumpTry(again){
   if(again!=="synced"&&near.some(x=>!D.P[x.id])){const k=lastKnock;Promise.resolve(syncNow()).catch(()=>{}).then(()=>{if(lastKnock===k)bumpTry("synced")});return}
   const ids=[...new Set(near.filter(x=>D.P[x.id]&&!D.P[x.id].removido).map(x=>x.id))];
   if(ids.length!==1){if(ids.length>1)$("#bumpTitle").textContent="Mais de um celular foi aproximado. Tente de novo.";return}
-  const to=ids[0];bumpClose();play("recv");
+  const to=ids[0];
+  if(bumpPay){ /* value was chosen before: the tap pays right away */
+    const P=bumpPay,D2=derive();bumpPay=null;bumpClose();
+    const before=balances(D2)[P.actor];
+    const r=lancar(P.actor,to,P.amt,P.note);
+    const after=balances(derive())[P.actor];
+    if(before>=0&&after<0)play("broke");else play("pay");
+    if(P.actor===L.me)flashCard();
+    toast("Pago: "+money(P.amt)+" para "+nameOf(to),{label:"Desfazer",run:()=>estornar(r.id)});
+    return;
+  }
+  bumpClose();play("recv");
   openSheet("pay");if($("#sheet").hidden)return;SH.to=to;drawSheet();toast("Pagar para "+nameOf(to));
   setTimeout(()=>{try{$("#shAmount").focus()}catch(e){}},250);
 }
-function bumpStart(){
+let bumpPay=null;
+function bumpStart(pay){
   if(!L||!L.me)return;
+  bumpPay=pay||null;
+  $("#bumpAmt").hidden=!bumpPay;
+  if(bumpPay)$("#bumpAmt").innerHTML=money(bumpPay.amt)+(bumpPay.note?`<small>${esc(bumpPay.note)}</small>`:"");
   if(!bumpCh){toast("O NFC precisa de internet. Use Pagar normalmente.");play("err");return}
   askMotion();
   bumpMode="pay";$("#bumpTitle").textContent="Aproxime do celular de quem vai receber";
   $("#bump").hidden=false;play("tap");
   clearTimeout(bumpT);bumpT=setTimeout(()=>{if(bumpMode)bumpFail("Não encontrei o outro celular. O app dele precisa estar aberto.")},25000);
 }
-function bumpFail(msg){bumpClose();toast(msg);play("err")}
+function bumpFail(msg){bumpPay=null;bumpClose();toast(msg+" Nada foi enviado.");play("err")}
 function bumpClose(){bumpMode=null;clearTimeout(bumpT);$("#bump").hidden=true}
-$("#aBump").onclick=bumpStart;
+$("#aBump").onclick=()=>{play("tap");openSheet("pay",null,true)};
 $("#bumpTap").onclick=()=>{knock(true);play("tap");const b=$("#bumpTap");b.classList.remove("hit");void b.offsetWidth;b.classList.add("hit")};
 /* the receiver taps their own card at the same moment: no need to touch the phones */
 
-$("#bumpCancel").onclick=()=>{bumpClose();play("tap")};
-$("#bumpList").onclick=()=>{bumpClose();openSheet("pay")};
+$("#bumpCancel").onclick=()=>{bumpPay=null;bumpClose();play("tap")};
+$("#bumpList").onclick=()=>{const P=bumpPay;bumpPay=null;bumpClose();openSheet("pay",P&&P.actor);if(P&&!$("#sheet").hidden){SH.to=null;SH.note=P.note||"";setAmount(P.amt);drawSheet()}};
 /* the receiver's phone must feel the knock too: ask for the motion sensor on the first tap inside a table */
 document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()},{passive:true});
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
