@@ -780,12 +780,16 @@ $("#players").addEventListener("pointermove",e=>{
   if(!sw.on){if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){sw=null;return}if(Math.abs(dx)<12)return;sw.on=true;try{sw.row.setPointerCapture(e.pointerId)}catch(err){}}
   sw.dx=Math.max(-140,Math.min(140,dx));
   sw.row.style.transform=`translateX(${sw.dx}px)`;sw.row.style.transition="none";
-  $("#players").dataset.swipe=sw.dx>0?"ferias":"preso";
+  const kind=sw.dx>0?"ferias":"preso",p=derive().P[sw.id]||{},undo=p.situacao===kind;
+  if(!sw.bg){sw.bg=document.createElement("div");$("#players").appendChild(sw.bg)}
+  sw.bg.style.top=sw.row.offsetTop+"px";sw.bg.style.height=sw.row.offsetHeight+"px";
+  sw.bg.className="swbg "+kind+(Math.abs(sw.dx)>80?" go":"");
+  sw.bg.innerHTML="<b>"+(kind==="ferias"?(undo?"↩️ Tirar das férias":"🏖️ Férias"):(undo?"🔓 Soltar":"🔒 Prender"))+"</b>";
   sw.row.classList.toggle("armed",Math.abs(sw.dx)>80);
 });
 function endSwipe(){
-  if(!sw)return;const {row,id,dx,on}=sw;sw=null;
-  row.style.transition="";row.style.transform="";row.classList.remove("armed");delete $("#players").dataset.swipe;
+  if(!sw)return;const {row,id,dx,on,bg}=sw;sw=null;
+  row.style.transition="";row.style.transform="";row.classList.remove("armed");if(bg)setTimeout(()=>bg.remove(),260);
   if(swDirty){swDirty=false;setTimeout(render,0)}
   if(!on)return;swiped=true;setTimeout(()=>swiped=false,350);
   if(Math.abs(dx)<80)return;
