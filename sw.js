@@ -1,9 +1,9 @@
 /* PORTI BANK — guarda o app no celular para abrir mesmo sem internet.
    Os dados da partida (Supabase) nunca passam por aqui. */
-const CACHE = "porti-bank-v29";
+const CACHE = "porti-bank-v30";
 const SHELL = [
   "./", "index.html", "app.js", "config.js", "manifest.webmanifest",
-  "icon-192.png", "icon-512.png", "apple-touch-icon.png", "banco-comeu.webp", "logo.webp",
+  "icon-192.png", "icon-512.png", "apple-touch-icon.png", "banco-comeu.webp", "logo.webp", "porti-ferias.js", "porti-ferias.css", "ferias-carro.webp", "ferias-cenario.webp",
   "vendor/supabase.js",
   "vendor/qrcode.js"
 ];

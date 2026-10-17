@@ -102,13 +102,13 @@ function tone(f,t0,dur,type,vol,f2){
   const a=actx();if(!a||a.state!=="running")return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;
   o.type=type||"sine";o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+dur);
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol||.15,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
-  o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05);
+  o.connect(g).connect(sfxBus||a.destination);o.start(t);o.stop(t+dur+.05);
 }
 function noise(t0,dur,vol,ftype,freq){
   const a=actx();if(!a||a.state!=="running")return;const b=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
   const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();f.type=ftype||"highpass";f.frequency.value=freq||3000;g.gain.value=vol;
-  s.buffer=b;s.connect(f).connect(g).connect(a.destination);s.start(a.currentTime+t0);
+  s.buffer=b;s.connect(f).connect(g).connect(sfxBus||a.destination);s.start(a.currentTime+t0);
 }
 const SFX={
   tap(){tone(880,0,.05,"triangle",.07)},
@@ -141,12 +141,26 @@ const SFX={
     tone(90,1.0,.55,"sawtooth",.07,260);tone(180,1.0,.55,"square",.03,520);
     tone(320,1.55,.75,"sawtooth",.08,70);noise(1.5,.8,.14,"bandpass",900);noise(1.55,.6,.05,"highpass",4000)
   },
+  /* 3D trip (6s): car rolls in ~0.2-1.6s, waits, honks, revs, leaves 3.2-4.9s */
+  vacay3d(){
+    tone(140,.2,1.4,"sawtooth",.04,95);noise(.2,1.4,.04,"lowpass",500);
+    tone(440,1.75,.14,"square",.06);tone(554,1.75,.14,"square",.05);tone(440,1.96,.22,"square",.06);tone(554,1.96,.22,"square",.05);
+    tone(85,2.3,.85,"sawtooth",.04,95);
+    tone(90,2.75,.5,"sawtooth",.07,280);tone(180,2.75,.5,"square",.03,560);
+    tone(330,3.2,1.5,"sawtooth",.08,60);noise(3.15,1.5,.13,"bandpass",900);noise(3.2,1.1,.05,"highpass",4000)
+  },
+  back3d(){tone(70,.25,2.2,"sawtooth",.05,150);noise(.25,2.2,.08,"bandpass",700);tone(150,2.3,.5,"sawtooth",.05,80);tone(440,2.9,.14,"square",.06);tone(554,2.9,.14,"square",.05);tone(440,3.11,.22,"square",.06);tone(554,3.11,.22,"square",.05)},
   back(){tone(260,0,.8,"sawtooth",.06,110);noise(0,.8,.1,"bandpass",800);tone(440,.95,.14,"square",.06);tone(554,.95,.14,"square",.05);tone(440,1.16,.2,"square",.06);tone(554,1.16,.2,"square",.05)},
   /* key turning and the door opening */
   unlock(){noise(0,.03,.18);tone(2200,0,.05,"square",.06);noise(.12,.03,.18);tone(2600,.12,.05,"square",.06);tone(240,.3,.5,"sawtooth",.04,700);noise(.3,.45,.04);[523,659,784].forEach((f,i)=>tone(f,.85+i*.08,.2,"triangle",.11))}
 };
+let sfxBus=null,longBus=null;
+const LONG_SFX={vacay3d:1,back3d:1};
+function stopSfx(){const b=longBus;longBus=null;const a=ac;if(!b||!a)return;try{b.gain.setTargetAtTime(0,a.currentTime,.05);setTimeout(()=>{try{b.disconnect()}catch(e){}},400)}catch(e){}}
 function play(k){
-  if(soundOn)try{wakeSound();SFX[k]()}catch(e){}
+  if(soundOn)try{wakeSound();
+    if(LONG_SFX[k]&&ac&&ac.state==="running"){stopSfx();longBus=ac.createGain();longBus.connect(ac.destination);sfxBus=longBus;try{SFX[k]()}finally{sfxBus=null}}
+    else SFX[k]()}catch(e){sfxBus=null}
   try{if(navigator.vibrate)navigator.vibrate(k==="err"?[40,40,40]:k==="ask"?[60,60,60]:k==="pay"?25:12)}catch(e){}
 }
 function drawSnd(){
@@ -666,6 +680,12 @@ let tripT;
 function tripShow(id,leaving){
   const now=Date.now(),k=id+(leaving?"v":"b");if(cellSeen[k]&&now-cellSeen[k]<5000)return;cellSeen[k]=now;
   const p=derive().P[id];if(!p)return;
+  if(window.PortiFerias){
+    const opt={nome:p.nome,foto:p.foto&&/^data:image\//.test(p.foto)?p.foto:"",cor:colorOf(p.cor).c};
+    play(leaving?"vacay3d":"back3d");
+    (leaving?PortiFerias.sair(opt):PortiFerias.voltar(opt)).then(r=>{if(r&&r.reason!=="concluida")stopSfx()});
+    return;
+  }
   const el=$("#trip");
   $("#tripWho").innerHTML=avatar(p,"big");
   $("#tripTxt").innerHTML=leaving?`<b>${esc(p.nome)}</b> saiu de férias!`:`<b>${esc(p.nome)}</b> voltou das férias!`;
