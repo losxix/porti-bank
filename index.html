@@ -518,6 +518,17 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
 .bumpanim .nfcw{position:absolute;left:50%;top:28px;width:34px;height:34px;margin-left:-17px;color:#252329;animation:nfcPulse 1.4s ease-in-out infinite}
 @keyframes nfcPulse{0%,100%{opacity:.25;transform:scale(.85)}50%{opacity:1;transform:scale(1.1)}}
 .bumpanim .wave{display:none}
+.txfilter{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.fchips{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 6px;margin:0 -2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.fchips::-webkit-scrollbar{display:none}
+.fchips button{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 13px;border:1.5px solid var(--edge);border-radius:999px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:1px 2px 0 var(--shadow)}
+.fchips button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);box-shadow:2px 3px 0 var(--shadow)}
+.fchips.who button{padding-left:5px}.fchips.who button:first-child{padding-left:13px}
+.fchips .avatar.sm{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;flex:0 0 24px!important;font-size:11px!important}
+.fchips.why button{font-weight:600;font-size:12px;min-height:32px}
+.txsum{margin:0 0 10px;font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+.txsum b{color:var(--ink)}.txsum .inc{color:#1d8a4a;font-weight:700}.txsum .outc{color:var(--neg);font-weight:700}
+.txsum .link{margin-left:auto;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -637,7 +648,7 @@ body{padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
       <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
         <p class="tip" id="swipeTip" hidden><span>Banqueiro: arraste um nome para a <b>direita</b> para dar férias, ou para a <b>esquerda</b> para prender. Faça o mesmo movimento para tirar.</span></p>
         <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
-      <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="tx" id="txList"></div><div class="txmore" id="txMore" hidden></div></div>
+      <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="txfilter" id="txFilter"></div><p class="txsum" id="txSum"></p><div class="tx" id="txList"></div><div class="txmore" id="txMore" hidden></div></div>
       <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Mudar os valores da mesa</button><button class="priv" id="hideRuleBtn" role="switch" aria-checked="true" hidden><span><b>Deixar os jogadores esconderem o saldo</b><span class="s" id="hideRuleSub">Ligado: cada um pode esconder o próprio saldo da mesa.</span></span><span class="sw2"></span></button></div>
       <div class="foot">
         <span class="muted num" style="font-size:12.5px" id="rules"></span>

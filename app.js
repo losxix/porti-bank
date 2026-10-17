@@ -1,4 +1,4 @@
-var TX_MIN=8,txShow=TX_MIN,sw=null,swiped=false,swDirty=false;
+var TX_MIN=8,txShow=TX_MIN,TXF={kind:"all",who:null,why:null},sw=null,swiped=false,swDirty=false;
 /* PORTI BANK — app da mesa.
    A partida fica no Supabase. Cada celular guarda uma cópia e uma fila de
    lançamentos ainda não enviados: sem internet, o jogo continua e a fila sobe
@@ -543,9 +543,35 @@ function render(){
    $("#lapsHint").textContent=boss?"Toque em + quando o jogador passar pela partida. Quem está preso não recebe; de férias recebe.":"Quantas vezes cada um recebeu a partida. Quem está atrás pode ter passado sem receber: avise o banqueiro.";}
 
   /* statement: everything that happened at the table */
+  /* filters */
+  {
+    const KINDS=[["all","Tudo"],["frombank","Banco → pessoas"],["tobank","Pessoas → banco"],["between","Entre jogadores"],["partida","Partida"],["pend","Pedidos"],["est","Estornados"]];
+    const okKind=t=>{const k=TXF.kind,st=t.status||"aprovado";
+      return k==="all"||(k==="frombank"&&!t.de&&t.para)||(k==="tobank"&&t.de&&!t.para)||(k==="between"&&t.de&&t.para)||(k==="partida"&&t.motivo==="Passou pela partida")||(k==="pend"&&st!=="aprovado")||(k==="est"&&!!t.estornado_em)};
+    const okWho=t=>!TXF.who||t.de===TXF.who||t.para===TXF.who;
+    if(TXF.who&&!D.P[TXF.who])TXF.who=null;
+    const base=txs.filter(t=>okKind(t)&&okWho(t));
+    const whys=[...new Set(base.map(t=>t.motivo).filter(Boolean))].sort((x,y)=>x.localeCompare(y,"pt-BR"));
+    if(TXF.why&&!whys.includes(TXF.why))TXF.why=null;
+    const people=playersArr(D).filter(p=>!p.removido);
+    const f=$("#txFilter");
+    f.innerHTML=`<div class="fchips">${KINDS.map(([k,l])=>`<button data-fk="${k}" aria-pressed="${TXF.kind===k}">${l}</button>`).join("")}</div>
+      <div class="fchips who"><button data-fw="" aria-pressed="${!TXF.who}">Todos</button>${people.map(p=>`<button data-fw="${esc(p.id)}" aria-pressed="${TXF.who===p.id}">${avatar(p,"sm")}${esc(p.nome)}</button>`).join("")}</div>
+      ${whys.length>1||TXF.why?`<div class="fchips why"><button data-fy="" aria-pressed="${!TXF.why}">Qualquer motivo</button>${whys.map(w=>`<button data-fy="${esc(w)}" aria-pressed="${TXF.why===w}">${esc(w)}</button>`).join("")}</div>`:""}`;
+    const fl=base.filter(t=>!TXF.why||t.motivo===TXF.why);
+    const live=fl.filter(t=>!t.estornado_em&&(t.status||"aprovado")==="aprovado");
+    let sum="";
+    if(TXF.who){const inn=live.filter(t=>t.para===TXF.who).reduce((a,t)=>a+t.valor,0),out=live.filter(t=>t.de===TXF.who).reduce((a,t)=>a+t.valor,0);
+      sum=`<b>${fl.length}</b> ${fl.length===1?"lançamento":"lançamentos"} · <span class="inc">entrou ${money(inn)}</span> · <span class="outc">saiu ${money(out)}</span>`}
+    else sum=`<b>${fl.length}</b> ${fl.length===1?"lançamento":"lançamentos"} · movimentou ${money(live.reduce((a,t)=>a+t.valor,0))}`;
+    const filtering=TXF.kind!=="all"||TXF.who||TXF.why;
+    $("#txSum").innerHTML=sum+(filtering?' <button class="link" data-fclear="1">Limpar filtros</button>':"");
+    txs.length=0;txs.push(...fl);
+  }
   const tl=$("#txList"),more=$("#txMore");
   more.hidden=txs.length<=TX_MIN;
   if(!more.hidden){const rest=txs.length-txShow;more.innerHTML=rest>0?`<button data-txmore="1">Ver mais ${Math.min(rest,20)} lançamentos <span>(${rest} escondidos)</span></button>${rest>20?'<button data-txmore="all">Ver tudo</button>':""}`:`<button data-txmore="less">Mostrar menos</button>`}
+  if(!txs.length&&(TXF.kind!=="all"||TXF.who||TXF.why)){tl.innerHTML='<p class="empty">Nada com esses filtros.</p>';return}
   if(!txs.length){tl.innerHTML='<p class="empty">Nenhum lançamento ainda. O primeiro pagamento aparece aqui em todos os celulares.</p>';return}
   tl.innerHTML=txs.slice(0,txShow).map(t=>{
     const st=t.status||"aprovado",est=!!t.estornado_em,wait=st==="pendente",rec=st==="recusado";
@@ -568,6 +594,10 @@ function render(){
       <div class="amt">${sign}${money(t.valor)}</div>
       <div class="meta"><span class="num">${time}</span>${t.motivo?`<span>${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join("");
 }
+$("#txFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.fk!==undefined)TXF.kind=b.dataset.fk;else if(b.dataset.fw!==undefined)TXF.who=b.dataset.fw||null;else if(b.dataset.fy!==undefined)TXF.why=b.dataset.fy||null;else return;
+  txShow=TX_MIN;play("tap");render()});
+$("#txSum").addEventListener("click",e=>{if(!e.target.closest("[data-fclear]"))return;TXF={kind:"all",who:null,why:null};txShow=TX_MIN;play("tap");render()});
 let joinColor=null;
 $("#txMore").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;play("tap");
   const v=b.dataset.txmore;if(v==="less"){txShow=TX_MIN;render();$("#txList").scrollIntoView({block:"start"})}else{txShow=v==="all"?1e9:txShow+20;render()}});
