@@ -47,6 +47,9 @@ create table if not exists public.pb_jogadores (
 create index if not exists pb_jogadores_mesa_idx on public.pb_jogadores (mesa);
 alter table public.pb_jogadores add column if not exists removido boolean not null default false;
 alter table public.pb_jogadores add column if not exists foto text;
+alter table public.pb_jogadores add column if not exists situacao text;
+alter table public.pb_jogadores drop constraint if exists pb_jogadores_situacao_ck;
+alter table public.pb_jogadores add constraint pb_jogadores_situacao_ck check (situacao is null or situacao in ('preso','ferias'));
 alter table public.pb_jogadores drop constraint if exists pb_jogadores_foto_ck;
 alter table public.pb_jogadores add constraint pb_jogadores_foto_ck check (foto is null or (char_length(foto) <= 30000 and foto ~ '^data:image/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$'));
 
@@ -185,6 +188,9 @@ begin
     raise exception 'Esta mesa chegou ao limite de lançamentos. Comece uma nova partida.';
   end if;
   select banqueiro into v_banq from pb_mesas where codigo = p_mesa;
+  if p_por is distinct from v_banq and exists (select 1 from pb_jogadores where id = p_por and situacao is not null) then
+    raise exception 'Você está preso ou de férias: só o banqueiro pode lançar por você agora.';
+  end if;
   if p_de is null and p_para is not null and v_banq is not null and p_por <> v_banq then
     v_status := 'pendente';
   end if;
@@ -328,6 +334,25 @@ begin
 end;
 $$;
 
+-- O banqueiro manda para a cadeia, dá férias ou solta um jogador.
+create or replace function public.pb_situacao(p_id uuid, p_por uuid, p_situacao text)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_mesa text;
+begin
+  select mesa into v_mesa from pb_jogadores where id = p_id;
+  if not found then raise exception 'Jogador não encontrado.'; end if;
+  if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = v_mesa) then
+    raise exception 'Só o banqueiro pode fazer isso.';
+  end if;
+  if p_situacao is not null and p_situacao not in ('preso','ferias') then raise exception 'Situação inválida.'; end if;
+  update pb_jogadores set situacao = p_situacao, atualizado_em = now() where id = p_id;
+end;
+$$;
+
 -- Foto de perfil (já chega pequena do celular).
 create or replace function public.pb_foto(p_id uuid, p_foto text)
 returns void
@@ -368,6 +393,7 @@ revoke all on function public.pb_passar_banco(text, uuid, uuid) from public;
 revoke all on function public.pb_ocultar(uuid, boolean, timestamptz) from public;
 revoke all on function public.pb_remover_jogador(uuid, uuid) from public;
 revoke all on function public.pb_foto(uuid, text) from public;
+revoke all on function public.pb_situacao(uuid, uuid, text) from public;
 revoke all on function public.pb_mesa_valores(text, uuid, integer, integer) from public;
 grant execute on function public.pb_criar_mesa(integer, integer) to anon, authenticated;
 grant execute on function public.pb_entrar(uuid, text, text, text) to anon, authenticated;
@@ -379,6 +405,7 @@ grant execute on function public.pb_passar_banco(text, uuid, uuid) to anon, auth
 grant execute on function public.pb_ocultar(uuid, boolean, timestamptz) to anon, authenticated;
 grant execute on function public.pb_remover_jogador(uuid, uuid) to anon, authenticated;
 grant execute on function public.pb_foto(uuid, text) to anon, authenticated;
+grant execute on function public.pb_situacao(uuid, uuid, text) to anon, authenticated;
 grant execute on function public.pb_mesa_valores(text, uuid, integer, integer) to anon, authenticated;
 
 -- 4) Tempo real: avisa os celulares na hora -----------------------------

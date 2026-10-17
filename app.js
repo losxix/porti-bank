@@ -114,7 +114,11 @@ const SFX={
   broke(){[392,370,349,262].forEach((f,i)=>tone(f,i*.18,.24,"sawtooth",.06))},
   sync(){tone(784,0,.12,"sine",.1);tone(1175,.1,.25,"sine",.1)},
   chomp(){[0,.32,.64,.96].forEach((t,i)=>{noise(t,.09,.14);tone(170-i*12,t,.16,"square",.09,90)});noise(1.25,.08,.1);tone(1320,1.27,.12,"triangle",.12);tone(1760,1.35,.4,"sine",.14)},
-  err(){tone(180,0,.18,"square",.07)}
+  err(){tone(180,0,.18,"square",.07)},
+  /* cell door sliding down, slamming and the key locking */
+  jail(){tone(900,0,.55,"sawtooth",.05,220);noise(0,.5,.05);noise(.55,.12,.22);tone(120,.55,.35,"square",.12,70);[700,1400,2100].forEach(f=>tone(f,.56,.5,"triangle",.04));noise(1.05,.03,.18);tone(2400,1.06,.05,"square",.06);noise(1.15,.03,.18);tone(1900,1.16,.06,"square",.06)},
+  /* key turning and the door opening */
+  unlock(){noise(0,.03,.18);tone(2200,0,.05,"square",.06);noise(.12,.03,.18);tone(2600,.12,.05,"square",.06);tone(240,.3,.5,"sawtooth",.04,700);noise(.3,.45,.04);[523,659,784].forEach((f,i)=>tone(f,.85+i*.08,.2,"triangle",.11))}
 };
 function play(k){
   if(soundOn)try{wakeSound();SFX[k]()}catch(e){}
@@ -165,6 +169,7 @@ function derive(){
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
     else if(op.t==="remover"&&P[op.id])P[op.id].removido=true;
     else if(op.t==="foto"&&P[op.id])P[op.id].foto=op.foto;
+    else if(op.t==="situacao"&&P[op.id])P[op.id].situacao=op.situacao||null;
     else if(op.t==="lancar"&&!T[op.id])T[op.id]={id:op.id,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:op.status||"aprovado",pend:true};
     else if(op.t==="estornar"&&T[op.id]&&!T[op.id].estornado_em&&T[op.id].status!=="recusado"){
       if(T[op.id].status==="pendente"){T[op.id].status="recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
@@ -204,6 +209,7 @@ function confirmOp(op){
   else if(op.t==="banco"&&L.mesa){L.mesa.banqueiro=op.para}
   else if(op.t==="remover"&&L.jog[op.id]){L.jog[op.id].removido=true}
   else if(op.t==="foto"&&L.jog[op.id]){L.jog[op.id].foto=op.foto}
+  else if(op.t==="situacao"&&L.jog[op.id]){L.jog[op.id].situacao=op.situacao||null}
   else if(op.t==="valores"&&L.mesa){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
 }
 function sendOp(op){
@@ -214,6 +220,7 @@ function sendOp(op){
   if(op.t==="recusar")return API.rpc("pb_recusar",{p_id:op.id,p_por:op.por});
   if(op.t==="ocultar")return API.rpc("pb_ocultar",{p_id:op.id,p_oculto:op.oculto,p_quando:op.em});
   if(op.t==="banco")return API.rpc("pb_passar_banco",{p_mesa:L.codigo,p_de:op.por,p_para:op.para});
+  if(op.t==="situacao")return API.rpc("pb_situacao",{p_id:op.id,p_por:op.por,p_situacao:op.situacao||null});
   if(op.t==="foto")return API.rpc("pb_foto",{p_id:op.id,p_foto:op.foto});
   if(op.t==="remover")return API.rpc("pb_remover_jogador",{p_id:op.id,p_por:op.por});
   if(op.t==="valores")return API.rpc("pb_mesa_valores",{p_mesa:L.codigo,p_por:op.por,p_saldo_inicial:op.saldo,p_salario:op.salario});
@@ -255,6 +262,11 @@ function mergeRows(kind,rows,notify){
     if(kind==="mesa"){mergeMesa(r);continue}
     if(!r.id||(r.mesa&&r.mesa!==L.codigo))continue;
     if(kind==="jog"){
+      if(notify&&r.id===L.me&&(r.situacao||null)!==((L.jog[r.id]||{}).situacao||null)){
+        if(r.situacao==="preso"){toast("Você foi para a cadeia! Só o banqueiro mexe na sua conta agora.");play("jail")}
+        else if(r.situacao==="ferias"){toast("Você está de férias. Só o banqueiro mexe na sua conta agora.");play("tap")}
+        else{toast("Você está livre!");play("unlock")}
+      }
       if(notify&&r.id===L.me&&r.removido&&!(L.jog[r.id]||{}).removido){toast("O banqueiro tirou seu cartão da mesa.");play("err")}
       if(notify&&!L.jog[r.id]&&!L.out.some(o=>o.t==="entrar"&&o.id===r.id))joined.push(r);
       L.jog[r.id]={...L.jog[r.id],...r};
@@ -451,6 +463,12 @@ function render(){
   $("#aSalary").querySelector(".s").textContent=boss?"Passei pela partida":"Passei pela partida · o banqueiro aprova";
   $("#aRecv").querySelector(".s").textContent=boss?"Do banco":"Pedido ao banqueiro";
   $("#rules").textContent="Mesa "+L.codigo+" · Início "+money(L.mesa.saldo_inicial)+" · Partida "+money(L.mesa.salario);
+  const sit=boss?null:meP.situacao;
+  $("#bars").hidden=!meP.situacao;$("#bars").className="bars"+(meP.situacao==="ferias"?" ferias":"");
+  $("#barsLbl").textContent=meP.situacao==="ferias"?"DE FÉRIAS":"NA CADEIA";
+  $("#jailBanner").hidden=!sit;
+  if(sit)$("#jailBanner").textContent=(sit==="ferias"?"Você está de férias.":"Você está na cadeia.")+" Só o banqueiro pode mexer na sua conta até ele te soltar.";
+  ["#aPay","#aSalary","#aRecv"].forEach(x=>{$(x).disabled=!!sit});
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
   $("#privEye").innerHTML=`<use href="#${meP.oculto?"i-eyeoff":"i-eye"}"/>`;
   $("#photoPrev").outerHTML=avatar(meP,"big").replace('class="avatar big"','class="avatar big" id="photoPrev"');
@@ -468,7 +486,7 @@ function render(){
   const max=Math.max(1,...vis.map(p=>bal[p.id]));
   $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
-    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"");
+    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="jailtag">na cadeia</span>':p.situacao==="ferias"?'<span class="jailtag">férias</span>':"");
     return `<button class="pl" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
       <span class="nm">${avatar(p)}${esc(p.nome)}${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
@@ -664,6 +682,7 @@ $("#privBtn").onclick=()=>{
 $("#aPay").onclick=()=>{play("tap");openSheet("pay")};
 $("#aRecv").onclick=()=>{play("tap");openSheet("recv")};
 $("#aSalary").onclick=e=>{
+  if(!iAmBanker()&&(derive().P[L.me]||{}).situacao){play("err");return}
   const b=e.currentTarget;b.disabled=true;setTimeout(()=>b.disabled=false,1500);
   const D=derive();
   if(!iAmBanker()&&txArr(D).some(t=>t.status==="pendente"&&t.para===L.me&&t.motivo==="Passou pela partida")){
@@ -679,6 +698,12 @@ $("#passBankBtn").onclick=()=>{
   $("#scrim").hidden=false;$("#bankSheet").hidden=false;play("tap");
 };
 $("#bankClose").onclick=closeSheets;
+$("#shJail").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b||!iAmBanker())return;
+  const a=SH.actor,v=b.dataset.sit||null,nm=nameOf(a);closeSheets();
+  enqueue({t:"situacao",id:a,situacao:v,por:L.me,em:nowIso()});
+  if(v==="preso"){play("jail");toast(nm+" foi para a cadeia!")}else if(v==="ferias"){play("tap");toast(nm+" está de férias.")}else{play("unlock");toast(nm+" está livre!")}
+});
 let rmT;
 $("#shRemove").onclick=e=>{
   const b=e.currentTarget,a=SH.actor;
@@ -730,6 +755,7 @@ function quickValues(){
 }
 function setAmount(n){$("#shAmount").value=n?"$ "+n.toLocaleString("pt-BR"):""}
 function openSheet(kind,actor){
+  if(L.me&&!iAmBanker()){const me=derive().P[L.me];if(me&&me.situacao){toast(me.situacao==="ferias"?"Você está de férias: só o banqueiro mexe na sua conta.":"Você está na cadeia: só o banqueiro mexe na sua conta.");play("err");return}}
   if(kind==="set"&&!iAmBanker())kind="pay";
   SH={kind,actor:actor||L.me,to:null,note:""};
   setAmount(0);closeCalc();
@@ -742,6 +768,8 @@ function drawSheet(){
   const D=derive(),a=SH.actor,proxy=a!==L.me,p=D.P[a]||{},bal=balances(D)[a]||0,boss=iAmBanker();
   const hiddenBal=p.oculto&&proxy;
   const rm=$("#shRemove");rm.hidden=!(boss&&proxy);
+  $("#shJail").hidden=!(boss&&proxy);
+  $("#shJail").querySelectorAll("button").forEach(b=>{const v=b.dataset.sit||null;b.hidden=(v===(p.situacao||null))});
   if(!rm.dataset.arm)rm.textContent="Remover "+(p.nome||"")+" da mesa";
   $("#shDot").style.background=colorOf(p.cor).c;
   $("#shName").textContent=proxy?"Lançando por "+p.nome:"Seu cartão";

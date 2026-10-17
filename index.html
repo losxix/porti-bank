@@ -408,7 +408,8 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
   <!-- main -->
   <section id="vMain" hidden>
     <div style="display:flex;flex-direction:column;gap:24px">
-      <div class="card" id="card"></div>
+      <div class="cardwrap"><div class="card" id="card"></div><div class="bars" id="bars" hidden><span id="barsLbl">NA CADEIA</span></div></div>
+      <div class="banner warn" id="jailBanner" hidden></div>
       <div class="req" id="reqBox" hidden><h2 id="reqTitle">Pedidos para aprovar</h2><div class="reqlist" id="reqList"></div></div>
       <div class="actions">
         <button class="act primary" id="aPay"><span class="ic"><svg><use href="#i-send"/></svg></span><span><b>Pagar</b><span class="s">Aluguel, compra ou imposto, para alguém ou o banco</span></span></button>
@@ -452,6 +453,7 @@ label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:800;
   <p class="hint" id="shHint" hidden></p>
   <div class="warn" id="shWarn"></div>
   <button class="btn" id="shGo" disabled>Pagar</button>
+  <div class="jailrow" id="shJail" hidden><button class="btn ghost small" data-sit="preso" type="button">Mandar para a cadeia</button><button class="btn ghost small" data-sit="ferias" type="button">Dar férias</button><button class="btn ghost small" data-sit="" type="button">Soltar</button></div>
   <button class="btn ghost" id="shRemove" hidden>Remover da mesa</button>
 </div>
 <div class="sheet" id="invSheet" hidden role="dialog" aria-modal="true" aria-labelledby="invTitle">
