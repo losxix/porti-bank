@@ -32,6 +32,9 @@ create table if not exists public.pb_mesas (
 alter table public.pb_mesas add column if not exists banqueiro uuid;
 alter table public.pb_mesas add column if not exists atualizado_em timestamptz not null default now();
 alter table public.pb_mesas add column if not exists esconder_permitido boolean not null default true;
+-- Rodadas sem jogar: o banqueiro define (cadeia 2, férias 1).
+alter table public.pb_mesas add column if not exists rodadas_cadeia smallint not null default 2;
+alter table public.pb_mesas add column if not exists rodadas_ferias smallint not null default 1;
 
 create table if not exists public.pb_jogadores (
   id            uuid primary key,
@@ -49,6 +52,8 @@ create index if not exists pb_jogadores_mesa_idx on public.pb_jogadores (mesa);
 alter table public.pb_jogadores add column if not exists removido boolean not null default false;
 alter table public.pb_jogadores add column if not exists foto text;
 alter table public.pb_jogadores add column if not exists situacao text;
+-- Quantas rodadas ainda faltam na cadeia / nas férias (o próprio jogador passa a vez).
+alter table public.pb_jogadores add column if not exists rodadas smallint;
 alter table public.pb_jogadores drop constraint if exists pb_jogadores_situacao_ck;
 alter table public.pb_jogadores add constraint pb_jogadores_situacao_ck check (situacao is null or situacao in ('preso','ferias'));
 alter table public.pb_jogadores drop constraint if exists pb_jogadores_foto_ck;
@@ -193,7 +198,9 @@ begin
     raise exception 'Você está preso ou de férias: só o banqueiro pode lançar por você agora.';
   end if;
   if p_de is null and p_para is not null and v_banq is not null and p_por <> v_banq then
-    v_status := 'pendente';
+    v_status := 'pendente';   -- dinheiro do banco: o banqueiro aprova
+  elsif p_de is not null and p_por <> p_de and not (p_por = v_banq and p_para is distinct from v_banq) then
+    v_status := 'pendente';   -- cobrança: quem paga confirma (o banqueiro só lança direto se não for para ele)
   end if;
   insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status,
                               aprovado_por, aprovado_em)
@@ -216,8 +223,15 @@ begin
   select * into v from pb_lancamentos where id = p_id for update;
   if not found then raise exception 'Pedido não encontrado.'; end if;
   if v.status <> 'pendente' then return; end if; -- já resolvido (toque duplo ou reenvio)
-  if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = v.mesa) then
-    raise exception 'Só o banqueiro pode aprovar.';
+  if v.de is null then
+    if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = v.mesa) then
+      raise exception 'Só o banqueiro pode aprovar.';
+    end if;
+  else
+    -- cobrança entre jogadores: quem paga confirma; o banqueiro também pode, se o dinheiro não for para ele
+    if p_por is null or not (p_por = v.de or (p_por = (select banqueiro from pb_mesas where codigo = v.mesa) and v.para is distinct from p_por)) then
+      raise exception 'Só quem paga pode confirmar essa cobrança.';
+    end if;
   end if;
   update pb_lancamentos
      set status = 'aprovado', aprovado_por = p_por, aprovado_em = now(), atualizado_em = now()
@@ -238,7 +252,8 @@ begin
   if not found then raise exception 'Pedido não encontrado.'; end if;
   if v.status <> 'pendente' then return; end if;
   if p_por is null or (p_por is distinct from (select banqueiro from pb_mesas where codigo = v.mesa)
-                       and p_por is distinct from v.lancado_por and p_por is distinct from v.para) then
+                       and p_por is distinct from v.lancado_por and p_por is distinct from v.para
+                       and p_por is distinct from v.de) then
     raise exception 'Só o banqueiro ou quem pediu pode cancelar.';
   end if;
   update pb_lancamentos
@@ -350,7 +365,12 @@ begin
     raise exception 'Só o banqueiro pode fazer isso.';
   end if;
   if p_situacao is not null and p_situacao not in ('preso','ferias') then raise exception 'Situação inválida.'; end if;
-  update pb_jogadores set situacao = p_situacao, atualizado_em = now() where id = p_id;
+  update pb_jogadores
+     set situacao = p_situacao,
+         rodadas = case p_situacao when 'preso' then (select rodadas_cadeia from pb_mesas where codigo = v_mesa)
+                                   when 'ferias' then (select rodadas_ferias from pb_mesas where codigo = v_mesa) end,
+         atualizado_em = now()
+   where id = p_id;
 end;
 $$;
 
@@ -837,5 +857,56 @@ end;
 $$;
 revoke all on function public.pb_casas_hip(uuid, text, integer, text, uuid, integer) from public;
 grant execute on function public.pb_casas_hip(uuid, text, integer, text, uuid, integer) to anon, authenticated;
+notify pgrst, 'reload schema';
+commit;
+
+-- ==================================================================
+-- RODADAS na cadeia / férias: cada vez que chega a vez de quem está preso
+-- (ou de férias), ele toca em "Passar a vez". Quando acabam, sai sozinho.
+-- ==================================================================
+begin;
+alter table public.pb_jogadores add column if not exists vez_op uuid;   -- último "passar a vez" (reenvio não conta 2 vezes)
+drop function if exists public.pb_passar_vez(uuid, uuid, timestamptz);
+create or replace function public.pb_passar_vez(p_id uuid, p_por uuid, p_op uuid)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  j pb_jogadores%rowtype;
+begin
+  select * into j from pb_jogadores where id = p_id for update;
+  if not found then raise exception 'Jogador não encontrado.'; end if;
+  if p_por is null or not (p_por = p_id or p_por = (select banqueiro from pb_mesas where codigo = j.mesa)) then
+    raise exception 'Só o próprio jogador ou o banqueiro.';
+  end if;
+  if j.situacao is null or j.vez_op is not distinct from p_op then return; end if;
+  if coalesce(j.rodadas, 1) <= 1 then
+    update pb_jogadores set situacao = null, rodadas = null, vez_op = p_op, atualizado_em = now() where id = p_id;
+  else
+    update pb_jogadores set rodadas = j.rodadas - 1, vez_op = p_op, atualizado_em = now() where id = p_id;
+  end if;
+end;
+$$;
+revoke all on function public.pb_passar_vez(uuid, uuid, uuid) from public;
+grant execute on function public.pb_passar_vez(uuid, uuid, uuid) to anon, authenticated;
+
+create or replace function public.pb_mesa_rodadas(p_mesa text, p_por uuid, p_cadeia integer, p_ferias integer)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if p_por is null or p_por is distinct from (select banqueiro from pb_mesas where codigo = p_mesa) then
+    raise exception 'Só o banqueiro pode mudar isso.';
+  end if;
+  if p_cadeia is null or p_cadeia < 1 or p_cadeia > 9 or p_ferias is null or p_ferias < 1 or p_ferias > 9 then
+    raise exception 'Escolha de 1 a 9 rodadas.';
+  end if;
+  update pb_mesas set rodadas_cadeia = p_cadeia, rodadas_ferias = p_ferias, atualizado_em = now() where codigo = p_mesa;
+end;
+$$;
+revoke all on function public.pb_mesa_rodadas(text, uuid, integer, integer) from public;
+grant execute on function public.pb_mesa_rodadas(text, uuid, integer, integer) to anon, authenticated;
 notify pgrst, 'reload schema';
 commit;

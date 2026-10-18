@@ -15,6 +15,14 @@ const COLORS=[
   {k:"roxo",c:"#6A3DA6"},{k:"preto",c:"#23252B"},{k:"laranja",c:"#E2661C"},{k:"rosa",c:"#CC3A80"}];
 const colorOf=k=>COLORS.find(x=>x.k===k)||COLORS[0];
 const $=s=>document.querySelector(s);
+/* only touch the DOM when the markup really changed: re-creating photos and lists on every sync is what makes weak phones stutter */
+const setHTML=(el,h)=>{if(!el||el._h===h)return false;el._h=h;el.innerHTML=h;return true};
+let lastPhotoHTML=null;
+/* modo leve: Android com pouca memória (ex.: Galaxy A12) ou quem ligar na mão.
+   Tira animações que ficam rodando, desfoques e o tabuleiro 3D animado. */
+const LITE_AUTO=(()=>{try{const ua=navigator.userAgent||"",mem=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;return /Android/i.test(ua)&&(mem<=4||cores<=4)}catch(e){return false}})();
+function liteOn(){try{const v=localStorage.getItem("pb-lite");if(v==="1")return true;if(v==="0")return false}catch(e){}return LITE_AUTO}
+document.documentElement.classList.toggle("lite",liteOn());
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>"$ "+Math.abs(Math.round(n)).toLocaleString("pt-BR");
 const fmt=n=>(n<0?"− ":"")+money(n);
@@ -249,8 +257,12 @@ function banker(){
   return b;
 }
 const iAmBanker=()=>!!L&&!!L.me&&banker()===L.me;
-/* bank money going to a player needs the banker, unless the banker launched it */
-const needsApproval=(de,para,por)=>!de&&!!para&&!!banker()&&por!==banker();
+/* bank money going to a player needs the banker, unless the banker launched it.
+   money leaving a player's account, launched by someone else, waits for that player to confirm
+   (the banker launches directly only when the money is not going to himself) */
+const needsApproval=(de,para,por)=>{const bk=banker();if(!de)return !!para&&!!bk&&por!==bk;return por!==de&&!(!!bk&&por===bk&&para!==bk)};
+/* who may confirm a pending entry */
+const canDecide=t=>{const bk=banker();if(!t.de)return L.me===bk;return L.me===t.de||(L.me===bk&&t.para!==bk)};
 
 /* merged view: server rows + what is still waiting in the queue */
 function derive(){
@@ -266,7 +278,8 @@ function derive(){
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
     else if(op.t==="remover"&&P[op.id])P[op.id].removido=true;
     else if(op.t==="foto"&&P[op.id])P[op.id].foto=op.foto;
-    else if(op.t==="situacao"&&P[op.id])P[op.id].situacao=op.situacao||null;
+    else if(op.t==="situacao"&&P[op.id]){P[op.id].situacao=op.situacao||null;P[op.id].rodadas=sitRounds(op.situacao)}
+    else if(op.t==="vez"&&P[op.id])passVez(P[op.id]);
     else if(op.t==="lancar"&&!T[op.id])T[op.id]={id:op.id,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo,lancado_por:op.por,feito_em:op.em,estornado_em:null,status:op.status||"aprovado",pend:true};
     else if(op.t==="estornar"&&T[op.id]&&!T[op.id].estornado_em&&T[op.id].status!=="recusado"){
       if(T[op.id].status==="pendente"){T[op.id].status="recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
@@ -391,6 +404,18 @@ function rentOf(c,t,dice){
 /* casas hipotecadas: cada uma rende metade do que custou e para de contar no aluguel */
 function houseHip(c){return Math.round((c.casa||0)/2)}
 function rentLvl(t){return Math.max(0,(t.casas||0)-(t.casas_hip||0))}
+/* rodadas sem jogar: o banqueiro define; cada "passar a vez" desconta uma, e no fim a pessoa sai */
+function sitRounds(sit){const m=(L&&L.mesa)||{};return sit==="preso"?(m.rcadeia||2):sit==="ferias"?(m.rferias||1):null}
+function passVez(p){if(!p.situacao)return;const r=(p.rodadas==null?1:p.rodadas)-1;if(r<=0){p.situacao=null;p.rodadas=null}else p.rodadas=r}
+function rdN(p){const r=p.rodadas==null?sitRounds(p.situacao):p.rodadas;return r?` · ${r}`:""}
+function roundsTxt(p){const r=p.rodadas==null?sitRounds(p.situacao):p.rodadas;return r==null?"":r===1?"falta 1 rodada":`faltam ${r} rodadas`}
+function doVez(id){
+  const D=derive(),p=D.P[id];if(!p||!p.situacao)return;
+  const r=p.rodadas==null?sitRounds(p.situacao):p.rodadas,was=p.situacao;
+  enqueue({t:"vez",id,op:uuid(),por:L.me,em:nowIso()});
+  if(r<=1){if(was==="preso")cellLater(id,false);else tripLater(id,false)}
+  else{play("tap");toast((id===L.me?"Vez passada":nameOf(id,D)+" passou a vez")+" · "+(r-1===1?"falta 1 rodada":`faltam ${r-1} rodadas`))}
+}
 
 /* ---------- sync engine ---------- */
 function enqueue(op){L.out.push(op);save();render();setTimeout(syncNow,0)}
@@ -408,7 +433,9 @@ function confirmOp(op){
   else if(op.t==="banco"&&L.mesa){L.mesa.banqueiro=op.para}
   else if(op.t==="remover"&&L.jog[op.id]){L.jog[op.id].removido=true}
   else if(op.t==="foto"&&L.jog[op.id]){L.jog[op.id].foto=op.foto}
-  else if(op.t==="situacao"&&L.jog[op.id]){L.jog[op.id].situacao=op.situacao||null}
+  else if(op.t==="situacao"&&L.jog[op.id]){L.jog[op.id].situacao=op.situacao||null;L.jog[op.id].rodadas=sitRounds(op.situacao)}
+  else if(op.t==="vez"&&L.jog[op.id]){if(L.jog[op.id].vez_op!==op.op){passVez(L.jog[op.id]);L.jog[op.id].vez_op=op.op}}
+  else if(op.t==="rodadas"&&L.mesa){L.mesa.rcadeia=op.cadeia;L.mesa.rferias=op.ferias}
   else if(op.t==="esconder"&&L.mesa){L.mesa.esconder=op.permitido}
   else if(op.t==="valores"&&L.mesa){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
   else if(op.t==="encerrar"&&L.mesa){L.mesa.encerrada=op.encerrada}
@@ -421,6 +448,8 @@ function sendOp(op){
   if(op.t==="recusar")return API.rpc("pb_recusar",{p_id:op.id,p_por:op.por});
   if(op.t==="ocultar")return API.rpc("pb_ocultar",{p_id:op.id,p_oculto:op.oculto,p_quando:op.em});
   if(op.t==="banco")return API.rpc("pb_passar_banco",{p_mesa:L.codigo,p_de:op.por,p_para:op.para});
+  if(op.t==="vez")return API.rpc("pb_passar_vez",{p_id:op.id,p_por:op.por,p_op:op.op});
+  if(op.t==="rodadas")return API.rpc("pb_mesa_rodadas",{p_mesa:L.codigo,p_por:op.por,p_cadeia:op.cadeia,p_ferias:op.ferias});
   if(op.t==="situacao")return API.rpc("pb_situacao",{p_id:op.id,p_por:op.por,p_situacao:op.situacao||null});
   if(op.t==="foto")return API.rpc("pb_foto",{p_id:op.id,p_foto:op.foto});
   if(op.t==="remover")return API.rpc("pb_remover_jogador",{p_id:op.id,p_por:op.por});
@@ -439,6 +468,7 @@ async function flush(cur){
     try{await sendOp(op)}
     catch(e){
       if((op.t==="encerrar"||(op.t==="titulo"&&(op.acao==="pedir"||op.acao==="vender"||op.acao==="aceitar_venda"||op.acao==="hipotecar_casas"||op.acao==="resgatar_casas"||op.valor!=null)))&&/inv[aá]lida|p_valor|function|does not exist/i.test(e.message||"")&&L===cur){cur.out.shift();save();toast("Falta o banqueiro rodar o SQL novo no Supabase para isso funcionar.");play("err");continue}
+      if((op.t==="vez"||op.t==="rodadas")&&(e.config||/function|does not exist|p_op|p_cadeia/i.test(e.message||""))&&L===cur){cur.out.shift();save();toast("Falta o banqueiro rodar o SQL novo no Supabase para contar as rodadas.");play("err");continue}
       if(e.config&&(op.t==="titulo"||op.t==="troca")&&L===cur){cur.out.shift();save();toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");play("err");continue}
       if(e.network||e.config)throw e;
       if(L!==cur)return sent;
@@ -454,7 +484,8 @@ async function flush(cur){
 function mergeMesa(m){
   if(!m||m.codigo!==L.codigo)return;
   const was=L.mesa&&L.mesa.banqueiro;
-  L.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null,esconder:m.esconder_permitido!==false,encerrada:!!m.encerrada};
+  L.mesa={saldo_inicial:m.saldo_inicial,salario:m.salario,banqueiro:m.banqueiro||null,esconder:m.esconder_permitido!==false,encerrada:!!m.encerrada,rcadeia:m.rodadas_cadeia||2,rferias:m.rodadas_ferias||1};
+  for(const op of L.out)if(op.t==="rodadas"){L.mesa.rcadeia=op.cadeia;L.mesa.rferias=op.ferias}
   for(const op of L.out)if(op.t==="encerrar")L.mesa.encerrada=op.encerrada;
   for(const op of L.out)if(op.t==="esconder")L.mesa.esconder=op.permitido;
   for(const op of L.out)if(op.t==="valores"){L.mesa.saldo_inicial=op.saldo;L.mesa.salario=op.salario}
@@ -514,8 +545,14 @@ function announce(news){
   const D=derive(),boss=iAmBanker();
   const eaten=news.filter(r=>r._new&&paysBank(r)&&(r.status||"aprovado")==="aprovado"&&r.lancado_por!==me);
   if(eaten.length){const r=eaten[eaten.length-1];bancoComeu(nameOf(r.de,D),r.valor)}
-  const asks=news.filter(r=>r._new&&r.status==="pendente"&&boss&&r.lancado_por!==me);
-  const mine=news.filter(r=>!asks.includes(r)&&(r.de===me||r.para===me));
+  const asks=news.filter(r=>r._new&&r.status==="pendente"&&boss&&!r.de&&r.lancado_por!==me);
+  const bills=news.filter(r=>r._new&&r.status==="pendente"&&r.de===me&&r.lancado_por!==me);
+  const mine=news.filter(r=>!asks.includes(r)&&!bills.includes(r)&&(r.de===me||r.para===me));
+  if(bills.length){
+    const r=bills[bills.length-1];
+    toast(bills.length>1?bills.length+" cobranças esperando você pagar":nameOf(r.para,D)+" está te cobrando "+money(r.valor)+(r.motivo?" ("+r.motivo+")":""));
+    play("ask");try{navigator.vibrate&&navigator.vibrate([80,60,80])}catch(e){}
+  }
   if(asks.length){
     toast(asks.length>1?asks.length+" pedidos esperando você aprovar":nameOf(asks[0].lancado_por,D)+" pediu "+money(asks[0].valor)+(asks[0].motivo?" ("+asks[0].motivo+")":""));
     play("ask");
@@ -524,6 +561,11 @@ function announce(news){
   if(mine.length>3){toast(mine.length+" lançamentos novos na sua conta");play("recv");flashCard();return}
   for(const r of mine){
     if(r._est){toast(nameOf(r.estornado_por,D)+" estornou "+money(r.valor)+" ("+nameOf(r.de,D)+" → "+nameOf(r.para,D)+")");play("undo")}
+    else if(r._dec&&r.de){
+      if(r.de===me)continue;
+      if(r._dec==="aprovado"){toast(nameOf(r.de,D)+" pagou "+money(r.valor)+(r.motivo?" ("+r.motivo+")":""));if(r.para===me){play("recv");flashCard()}else play("pay")}
+      else toast(nameOf(r.aprovado_por||r.de,D)+" recusou a cobrança de "+money(r.valor)),play("err");
+    }
     else if(r._dec){
       if(r.para===me&&r._dec==="aprovado"){toast("O banqueiro aprovou: + "+money(r.valor));play(r.motivo==="Passou pela partida"?"go":"recv");flashCard()}
       else if(r.para===me){toast("O banqueiro recusou o pedido de "+money(r.valor));play("err")}
@@ -681,34 +723,43 @@ function render(){
   if(!$("#b3d").hidden&&!b3.ptrs.size)drawBoard3d();
   drawOffer(D);
   drawEnd();
+  drawMyCards(D);
   {const mine=Object.values(D.Tit).filter(t=>t.dono===L.me).length;$("#cardsSub").textContent=mine?`Você tem ${mine} ${mine===1?"carta":"cartas"} · propriedades, casas e hipotecas`:"Propriedades, casas e hipotecas"}
   const boss=iAmBanker(),bk=banker();
   const bal=balances(D),c=colorOf(meP.cor),card=$("#card");
   card.style.backgroundColor=c.c;
   card.style.backgroundImage=`linear-gradient(140deg,${c.c} 0%,color-mix(in oklab,${c.c} 62%,#000) 100%)`;
   card.classList.toggle("darktext",!!c.dark);
-  card.innerHTML=`<svg class="gl"><use href="#globe"/></svg>
+  setHTML(card,`<svg class="gl"><use href="#globe"/></svg>
     <div class="row"><span class="cw">PORTI BANK</span><span class="tier">${boss?"BANQUEIRO":"MUNDO"}</span></div>
     <div class="chiprow"><span class="chip"></span><svg class="nfc"><use href="#i-nfc"/></svg></div>
     <button class="balbtn" id="peekBtn" aria-label="${peek?"Mostrar saldo":"Tapar saldo"}"><div class="lbl">Saldo disponível<svg class="eye"><use href="#${peek?"i-eyeoff":"i-eye"}"/></svg></div><div class="bal">${peek?MASK:fmt(bal[L.me])}</div></button>
-    <div class="row"><span class="holder">${esc(meP.nome)}</span><span class="cardnum">•••• ${last4(L.me)}</span></div>`;
+    <div class="row"><span class="holder">${esc(meP.nome)}</span><span class="cardnum">•••• ${last4(L.me)}</span></div>`);
 
   /* requests */
   const txs=txArr(D);
   const pending=txs.filter(t=>t.status==="pendente").reverse();
   const box=$("#reqBox");
-  if(boss&&pending.length){
-    box.hidden=false;$("#reqTitle").textContent=pending.length>1?pending.length+" pedidos para aprovar":"Pedido para aprovar";
-    $("#reqList").innerHTML=pending.map(t=>`<div class="rq"><div class="who">${avatar(D.P[t.para],"sm")}<span class="n">${esc(nameOf(t.para,D))}</span></div><div class="amt">+ ${money(t.valor)}</div>
+  {
+    const bills=pending.filter(t=>t.de===L.me&&t.lancado_por!==L.me);
+    const asks=boss?pending.filter(t=>!t.de&&t.lancado_por!==L.me):[];
+    const proxyBills=boss?pending.filter(t=>t.de&&t.de!==L.me&&t.para!==L.me&&t.lancado_por!==L.me):[];
+    const myWait=pending.filter(t=>!bills.includes(t)&&!asks.includes(t)&&!proxyBills.includes(t)&&(t.lancado_por===L.me||(!t.de&&t.para===L.me)));
+    let h="";
+    if(bills.length)h+=`<h2>${bills.length>1?bills.length+" cobranças para você":"Cobrança para você"}</h2>`+bills.map(t=>`<div class="rq bill"><div class="who">${avatar(D.P[t.para],"sm")}<span class="n">${esc(nameOf(t.para,D))} está cobrando</span></div><div class="amt">− ${money(t.valor)}</div>
+      <div class="meta" style="grid-column:1/-1">${t.motivo?`<span class="rtag"${rStyle(t.motivo)}>${rIcon(t.motivo)}${esc(t.motivo)}</span>`:"Sem motivo"}</div>
+      <div class="btns"><button class="btn ghost small" data-deny="${esc(t.id)}">Recusar</button><button class="btn ok small" data-approve="${esc(t.id)}">Pagar ${money(t.valor)}</button></div></div>`).join("");
+    if(asks.length)h+=`<h2>${asks.length>1?asks.length+" pedidos para aprovar":"Pedido para aprovar"}</h2>`+asks.map(t=>`<div class="rq"><div class="who">${avatar(D.P[t.para],"sm")}<span class="n">${esc(nameOf(t.para,D))}</span></div><div class="amt">+ ${money(t.valor)}</div>
       <div class="meta" style="grid-column:1/-1">${esc(t.motivo||"Receber do banco")}${t.lancado_por!==t.para?" · pedido por "+esc(nameOf(t.lancado_por,D)):""}</div>
       <div class="btns"><button class="btn ghost small" data-deny="${esc(t.id)}">Recusar</button><button class="btn ok small" data-approve="${esc(t.id)}">Aprovar ${money(t.valor)}</button></div></div>`).join("");
-  }else{
-    const myWait=pending.filter(t=>t.lancado_por===L.me||t.para===L.me);
-    box.hidden=!myWait.length;
-    if(myWait.length){$("#reqTitle").textContent="Aguardando o banqueiro";
-      $("#reqList").innerHTML=myWait.map(t=>`<div class="rq"><div class="who"><span class="n">${esc(t.motivo||"Receber do banco")}</span></div><div class="amt">+ ${money(t.valor)}</div>
-        <div class="meta" style="grid-column:1/-1">${bk?esc(nameOf(bk,D))+" precisa aprovar.":"O banqueiro precisa aprovar."}</div>
-        <div class="btns" style="grid-template-columns:1fr"><button class="btn ghost small" data-deny="${esc(t.id)}">Cancelar pedido</button></div></div>`).join("")}
+    if(proxyBills.length)h+=`<h2>Cobranças entre jogadores</h2>`+proxyBills.map(t=>`<div class="rq"><div class="who">${avatar(D.P[t.de],"sm")}<span class="n">${esc(nameOf(t.de,D))} → ${esc(nameOf(t.para,D))}</span></div><div class="amt">${money(t.valor)}</div>
+      <div class="meta" style="grid-column:1/-1">${esc(t.motivo||"Cobrança")} · esperando ${esc(shortName(nameOf(t.de,D)))} confirmar. Celular dele apagou? Você pode confirmar por ele.</div>
+      <div class="btns"><button class="btn ghost small" data-deny="${esc(t.id)}">Recusar</button><button class="btn small" data-approve="${esc(t.id)}">Confirmar por ${esc(shortName(nameOf(t.de,D)))}</button></div></div>`).join("");
+    if(myWait.length)h+=`<h2>Aguardando confirmação</h2>`+myWait.map(t=>`<div class="rq"><div class="who"><span class="n">${t.de?`Cobrança para ${esc(nameOf(t.de,D))}`:esc(t.motivo||"Receber do banco")}</span></div><div class="amt">${t.de?"":"+ "}${money(t.valor)}</div>
+      <div class="meta" style="grid-column:1/-1">${t.de?`${esc(t.motivo?t.motivo+" · ":"")}${esc(shortName(nameOf(t.de,D)))} precisa confirmar no celular.`:bk?esc(nameOf(bk,D))+" precisa aprovar.":"O banqueiro precisa aprovar."}</div>
+      <div class="btns" style="grid-template-columns:1fr"><button class="btn ghost small" data-deny="${esc(t.id)}">${t.de?"Cancelar cobrança":"Cancelar pedido"}</button></div></div>`).join("");
+    box.hidden=!h;setHTML($("#reqList"),h);
+    box.classList.toggle("hasbill",!!bills.length);
   }
 
   /* action buttons */
@@ -719,12 +770,13 @@ function render(){
   const sit=boss?null:meP.situacao;
   $("#bars").hidden=!meP.situacao;$("#bars").className="bars"+(meP.situacao==="ferias"?" ferias":"");
   $("#barsLbl").textContent=meP.situacao==="ferias"?"DE FÉRIAS":"NA CADEIA";
-  $("#jailBanner").hidden=!sit;
-  if(sit)$("#jailBanner").textContent=(sit==="ferias"?"Você está de férias.":"Você está na cadeia.")+" Só o banqueiro pode mexer na sua conta até ele te soltar.";
+  $("#jailBanner").hidden=!meP.situacao;
+  if(meP.situacao)setHTML($("#jailBanner"),`<div class="jbtxt"><b>${meP.situacao==="ferias"?"Você está de férias":"Você está na cadeia"} · ${roundsTxt(meP)}</b><span>Quando chegar a sua vez de jogar, toque em <b>Passar a vez</b>. Ao acabar as rodadas você volta sozinho.${sit?" Até lá, só o banqueiro mexe na sua conta.":""}</span></div><button class="btn small jbvez" type="button" data-vez="${esc(L.me)}">Passar a vez</button>`);
   ["#aPay","#aSalary","#aRecv","#aBump"].forEach(x=>{$(x).disabled=!!sit});
   $("#privBtn").setAttribute("aria-checked",String(!!meP.oculto));
+  $("#liteBtn").setAttribute("aria-checked",String(liteOn()));$("#liteSub").textContent=liteOn()?(LITE_AUTO?"Ligado sozinho porque este celular é mais simples.":"Ligado: menos animação, mais rápido."):"Desligado. Ligue se o app travar ou ficar lento.";
   $("#privEye").innerHTML=`<use href="#${meP.oculto?"pe-eyeoff":"pe-eye"}"/>`;
-  $("#photoPrev").outerHTML=avatar(meP,"big").replace('class="avatar big"','class="avatar big" id="photoPrev"');
+  {const ph=avatar(meP,"big").replace('class="avatar big"','class="avatar big" id="photoPrev"');if(ph!==lastPhotoHTML){lastPhotoHTML=ph;$("#photoPrev").outerHTML=ph}}
   $("#photoSub").textContent=meP.foto?"Aparece no ranking da mesa. Toque para trocar.":"Aparece no ranking da mesa. Toque para escolher.";
   $("#privSub").textContent=meP.oculto?"Os outros veem $ ••••• no lugar do seu saldo":"Os outros jogadores veem seu saldo no ranking";
   $("#bankText").innerHTML=boss?"<b>Você é o banqueiro.</b> Você aprova o dinheiro que sai do banco para os jogadores.":bk?`Banqueiro da mesa: <b>${esc(nameOf(bk,D))}</b>. Dinheiro do banco só cai depois que ele aprova.`:"Esta mesa ainda não tem banqueiro.";
@@ -743,23 +795,23 @@ function render(){
   const vis=all.filter(p=>!hiddenFor(p)).sort((a,b)=>bal[b.id]-bal[a.id]);
   const hid=all.filter(hiddenFor);
   const max=Math.max(1,...vis.map(p=>bal[p.id]));
-  if(sw&&sw.on){swDirty=true}else $("#players").innerHTML=[...vis,...hid].map((p,i)=>{
+  if(sw&&sw.on){swDirty=true}else setHTML($("#players"),[...vis,...hid].map((p,i)=>{
     const cc=colorOf(p.cor).c,h=hiddenFor(p),w=h?0:Math.max(0,bal[p.id])/max*100;
-    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="ps-status ps-preso" data-porti-status="preso" title="Preso"><img src="status-preso.svg" alt="" aria-hidden="true"><span>Preso</span></span>':p.situacao==="ferias"?'<span class="ps-status ps-ferias" data-porti-status="ferias" title="Férias"><img src="status-ferias.svg" alt="" aria-hidden="true"><span>Férias</span></span>':"");
+    const tag=(p.id===L.me?(p.oculto?'<span class="you">você · oculto</span>':'<span class="you">você</span>'):h?'<span class="lock">oculto</span>':"")+(p.id===bk?'<span class="banker">banqueiro</span>':"")+(p.situacao==="preso"?'<span class="ps-status ps-preso" data-porti-status="preso" title="Preso"><img src="status-preso.svg" alt="" aria-hidden="true"><span>Preso${rdN(p)}</span></span>':p.situacao==="ferias"?'<span class="ps-status ps-ferias" data-porti-status="ferias" title="Férias"><img src="status-ferias.svg" alt="" aria-hidden="true"><span>Férias${rdN(p)}</span></span>':"");
     return `<button class="pl${p.situacao==="preso"?" jailed":p.situacao==="ferias"?" vac":""}" data-actor="${esc(p.id)}" aria-label="Lançar por ${esc(p.nome)}"><span class="pos">${h?"—":String(i+1).padStart(2,"0")}</span>
       <span class="nm">${avatar(p)}<span class="nmtxt">${esc(p.nome)}</span>${tag}</span>
       <span class="v ${!h&&bal[p.id]<0?"neg-t":""}">${h?MASK:fmt(bal[p.id])}</span>
-      <span class="bar"><i style="width:${w}%;background:${cc}"></i></span></button>`}).join("");
+      <span class="bar"><i style="width:${w}%;background:${cc}"></i></span></button>`}).join(""));
 
   /* laps: how many times each player got the GO money */
   {const laps={},lastLap={};
    for(const t of txs){if(t.motivo==="Passou pela partida"&&t.para&&counts(t)){laps[t.para]=(laps[t.para]||0)+1;if(!lastLap[t.para])lastLap[t.para]=t.feito_em}}
    const mx=Math.max(0,...all.map(p=>laps[p.id]||0));
-   $("#laps").innerHTML=all.map(p=>{
+   setHTML($("#laps"),all.map(p=>{
      const n=laps[p.id]||0,ago=lastLap[p.id]?Math.max(0,Math.round((Date.now()-tms(lastLap[p.id]))/60000)):null;
      const behind=n<mx&&p.situacao!=="preso";
      const sit=p.situacao==="preso"?"na cadeia":p.situacao==="ferias"?"de férias":"";
-     return `<div class="lap ${behind?"behind":""}">${avatar(p,"sm")}<div class="lapinfo"><b>${esc(p.nome)}</b><span>${n} ${n===1?"volta":"voltas"}${ago!==null?" · última há "+(ago<1?"menos de 1 min":ago+" min"):""}${sit?" · "+sit:""}${behind?" · está atrás":""}</span></div>${boss?`<button class="btn small lapbtn" data-lap="${esc(p.id)}" ${p.situacao==="preso"?"disabled":""}>+ ${short(L.mesa.salario)}</button>`:`<span class="lapn">${n}</span>`}</div>`}).join("");
+     return `<div class="lap ${behind?"behind":""}">${avatar(p,"sm")}<div class="lapinfo"><b>${esc(p.nome)}</b><span>${n} ${n===1?"volta":"voltas"}${ago!==null?" · última há "+(ago<1?"menos de 1 min":ago+" min"):""}${sit?" · "+sit:""}${behind?" · está atrás":""}</span></div>${boss?`<button class="btn small lapbtn" data-lap="${esc(p.id)}" ${p.situacao==="preso"?"disabled":""}>+ ${short(L.mesa.salario)}</button>`:`<span class="lapn">${n}</span>`}</div>`}).join(""));
    $("#lapsHint").textContent=boss?"Toque em + quando o jogador passar pela partida. Quem está preso não recebe; de férias recebe.":"Quantas vezes cada um recebeu a partida. Quem está atrás pode ter passado sem receber: avise o banqueiro.";}
 
   /* statement: everything that happened at the table */
@@ -775,9 +827,9 @@ function render(){
     if(TXF.why&&!whys.includes(TXF.why))TXF.why=null;
     const people=playersArr(D).filter(p=>!p.removido);
     const f=$("#txFilter");
-    f.innerHTML=`<div class="fchips">${KINDS.map(([k,l])=>`<button data-fk="${k}" aria-pressed="${TXF.kind===k}">${l}</button>`).join("")}</div>
+    setHTML(f,`<div class="fchips">${KINDS.map(([k,l])=>`<button data-fk="${k}" aria-pressed="${TXF.kind===k}">${l}</button>`).join("")}</div>
       <div class="fchips who"><button data-fw="" aria-pressed="${!TXF.who}">Todos</button>${people.map(p=>`<button data-fw="${esc(p.id)}" aria-pressed="${TXF.who===p.id}">${avatar(p,"sm")}${esc(p.nome)}</button>`).join("")}</div>
-      ${whys.length>1||TXF.why?`<div class="fchips why"><button data-fy="" aria-pressed="${!TXF.why}">Qualquer motivo</button>${whys.map(w=>`<button class="rchip" data-fy="${esc(w)}" aria-pressed="${TXF.why===w}"${rStyle(w)}>${rIcon(w)}${esc(w)}</button>`).join("")}</div>`:""}`;
+      ${whys.length>1||TXF.why?`<div class="fchips why"><button data-fy="" aria-pressed="${!TXF.why}">Qualquer motivo</button>${whys.map(w=>`<button class="rchip" data-fy="${esc(w)}" aria-pressed="${TXF.why===w}"${rStyle(w)}>${rIcon(w)}${esc(w)}</button>`).join("")}</div>`:""}`);
     const fl=base.filter(t=>!TXF.why||t.motivo===TXF.why);
     const live=fl.filter(t=>!t.estornado_em&&(t.status||"aprovado")==="aprovado");
     let sum="";
@@ -791,9 +843,9 @@ function render(){
   const tl=$("#txList"),more=$("#txMore");
   more.hidden=txs.length<=TX_MIN;
   if(!more.hidden){const rest=txs.length-txShow;more.innerHTML=rest>0?`<button data-txmore="1">Ver mais ${Math.min(rest,20)} lançamentos <span>(${rest} escondidos)</span></button>${rest>20?'<button data-txmore="all">Ver tudo</button>':""}`:`<button data-txmore="less">Mostrar menos</button>`}
-  if(!txs.length&&(TXF.kind!=="all"||TXF.who||TXF.why)){tl.innerHTML='<p class="empty">Nada com esses filtros.</p>';return}
-  if(!txs.length){tl.innerHTML='<p class="empty">Nenhum lançamento ainda. O primeiro pagamento aparece aqui em todos os celulares.</p>';return}
-  tl.innerHTML=txs.slice(0,txShow).map(t=>{
+  if(!txs.length&&(TXF.kind!=="all"||TXF.who||TXF.why)){setHTML(tl,'<p class="empty">Nada com esses filtros.</p>');return}
+  if(!txs.length){setHTML(tl,'<p class="empty">Nenhum lançamento ainda. O primeiro pagamento aparece aqui em todos os celulares.</p>');return}
+  setHTML(tl,txs.slice(0,txShow).map(t=>{
     const st=t.status||"aprovado",est=!!t.estornado_em,wait=st==="pendente",rec=st==="recusado";
     const cls=(t.para===L.me?"in":t.de===L.me?"out":"")+(est?" est":"")+(wait?" wait":"")+(rec?" rec":"");
     const time=new Date(tms(t.feito_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
@@ -801,10 +853,10 @@ function render(){
     const via=t.lancado_por&&t.lancado_por!==t.de&&t.lancado_por!==t.para?`<span>lançado por ${esc(nameOf(t.lancado_por,D))}</span>`:"";
     const appr=st==="aprovado"&&!t.de&&t.aprovado_por&&t.aprovado_por!==t.lancado_por?`<span>aprovado por ${esc(nameOf(t.aprovado_por,D))}</span>`:"";
     const pend=t.pend?'<span class="pend">aguardando internet</span>':"";
-    const stl=wait?'<span class="waitlbl">aguardando o banqueiro</span>':rec?`<span class="reclbl">${t.aprovado_por&&t.aprovado_por===t.lancado_por&&t.aprovado_por!==bk?"Pedido cancelado":"Recusado"}</span>`:"";
+    const stl=wait?`<span class="waitlbl">${t.de?"aguardando "+esc(shortName(nameOf(t.de,D)))+" confirmar":"aguardando o banqueiro"}</span>`:rec?`<span class="reclbl">${t.aprovado_por&&t.aprovado_por===t.lancado_por&&t.aprovado_por!==bk?"Pedido cancelado":"Recusado"}</span>`:"";
     const estl=est?`<span class="estlbl">${t.estPend?"Estornando…":"Estornado por "+esc(nameOf(t.estornado_por,D))}</span>`:"";
     let btns="";
-    if(wait&&boss)btns=`<button class="okbtn" data-approve="${esc(t.id)}">Aprovar</button><button class="undo" data-deny="${esc(t.id)}">Recusar</button>`;
+    if(wait&&canDecide(t))btns=`<button class="okbtn" data-approve="${esc(t.id)}">${t.de===L.me?"Pagar":t.de?"Confirmar por "+esc(shortName(nameOf(t.de,D))):"Aprovar"}</button><button class="undo" data-deny="${esc(t.id)}">Recusar</button>`;
     else if(wait&&(t.lancado_por===L.me||t.para===L.me))btns=`<button class="undo" data-deny="${esc(t.id)}">Cancelar pedido</button>`;
     else if(canUndo)btns=`<button class="undo ${armedUndo===t.id?"arm":""}" data-undo="${esc(t.id)}">${armedUndo===t.id?"Confirmar estorno":"Estornar"}</button>`;
     const off=est||rec||wait;
@@ -812,7 +864,7 @@ function render(){
     return `<div class="t ${cls}"><span class="ar">${t.para===L.me?"↓":t.de===L.me?"↑":"⇄"}</span>
       <div class="who">${esc(nameOf(t.de,D))} → ${esc(nameOf(t.para,D))}</div>
       <div class="amt">${sign}${money(t.valor)}</div>
-      <div class="meta"><span class="num">${time}</span>${t.motivo?`<span class="rtag"${rStyle(t.motivo)}>${rIcon(t.motivo)}${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join("");
+      <div class="meta"><span class="num">${time}</span>${t.motivo?`<span class="rtag"${rStyle(t.motivo)}>${rIcon(t.motivo)}${esc(t.motivo)}</span>`:""}${via}${appr}${pend}${stl}${estl}${btns}</div></div>`}).join(""));
 }
 $("#txFilter").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
   if(b.dataset.fk!==undefined)TXF.kind=b.dataset.fk;else if(b.dataset.fw!==undefined)TXF.who=b.dataset.fw||null;else if(b.dataset.fy!==undefined)TXF.why=b.dataset.fy||null;else return;
@@ -930,12 +982,13 @@ function estornar(id){
 function decide(id,ok){
   const D=derive(),t=D.T[id];if(!t||t.status!=="pendente")return;
   if(ok){
-    if(!iAmBanker()){toast("Só o banqueiro pode aprovar.");play("err");return}
-    enqueue({t:"aprovar",id,por:L.me,em:nowIso()});play(t.motivo==="Passou pela partida"?"go":"recv");
-    toast("Aprovado: + "+money(t.valor)+" para "+nameOf(t.para,D));
+    if(!canDecide(t)){toast(t.de?"Quem paga precisa confirmar no celular dele.":"Só o banqueiro pode aprovar.");play("err");return}
+    enqueue({t:"aprovar",id,por:L.me,em:nowIso()});
+    if(t.de){const bal=balances(derive())[t.de];play(bal<0?"broke":"pay");toast((t.de===L.me?"Pago: ":nameOf(t.de,D)+" pagou ")+money(t.valor)+" para "+nameOf(t.para,D));if(t.de===L.me)flashCard()}
+    else{play(t.motivo==="Passou pela partida"?"go":"recv");toast("Aprovado: + "+money(t.valor)+" para "+nameOf(t.para,D))}
   }else{
     enqueue({t:"recusar",id,por:L.me,em:nowIso()});play("undo");
-    toast(iAmBanker()&&t.lancado_por!==L.me?"Pedido de "+nameOf(t.para,D)+" recusado":"Pedido cancelado");
+    toast(t.de?(t.lancado_por===L.me?"Cobrança cancelada":"Cobrança recusada"):iAmBanker()&&t.lancado_por!==L.me?"Pedido de "+nameOf(t.para,D)+" recusado":"Pedido cancelado");
   }
 }
 let armedUndo=null,armT;
@@ -944,6 +997,7 @@ document.addEventListener("click",e=>{
   if(b.dataset.claim){L.me=b.dataset.claim;forceJoin=false;save();play("tap");render()}
   else if(b.dataset.color){joinColor=b.dataset.color;play("tap");renderJoin(derive())}
   else if(b.dataset.approve){decide(b.dataset.approve,true)}
+  else if(b.dataset.vez){doVez(b.dataset.vez);if(!$("#plSheet").hidden)drawPlayer()}
   else if(b.dataset.deny){decide(b.dataset.deny,false)}
   else if(b.dataset.undo){
     const id=b.dataset.undo;
@@ -1075,6 +1129,11 @@ $("#photoIn").addEventListener("change",async e=>{
   try{const d=await shrinkPhoto(f);enqueue({t:"foto",id:L.me,foto:d,em:nowIso()});play("recv");toast("Foto atualizada")}
   catch(err){play("err");toast(err.message||"Não deu para usar essa foto.")}
 });
+$("#liteBtn").onclick=()=>{
+  const v=!liteOn();try{localStorage.setItem("pb-lite",v?"1":"0")}catch(e){}
+  document.documentElement.classList.toggle("lite",v);play("tap");render();
+  toast(v?"Modo leve ligado: menos animação, mais rápido.":"Modo leve desligado.");
+};
 $("#privBtn").onclick=()=>{
   const D=derive(),meP=D.P[L.me];if(!meP)return;const v=!meP.oculto;
   enqueue({t:"ocultar",id:L.me,oculto:v,em:nowIso()});play("tap");
@@ -1116,9 +1175,13 @@ $("#shRemove").onclick=e=>{
 };
 $("#valBtn").onclick=()=>{
   $("#vStart").value=L.mesa.saldo_inicial.toLocaleString("pt-BR");$("#vSalary").value=L.mesa.salario.toLocaleString("pt-BR");
+  VR={cadeia:L.mesa.rcadeia||2,ferias:L.mesa.rferias||1};drawVR();
   $("#scrim").hidden=false;$("#valSheet").hidden=false;play("tap");
 };
 ["#vStart","#vSalary"].forEach(x=>$(x).addEventListener("input",e=>fmtInput(e.target)));
+var VR={cadeia:2,ferias:1};
+function drawVR(){$("#vRounds").innerHTML=[["cadeia","Na cadeia","status-preso.svg"],["ferias","De férias","status-ferias.svg"]].map(([k,l,ic])=>`<div class="vr"><img src="${ic}" alt=""><span><b>${l}</b><small>fica ${VR[k]} ${VR[k]===1?"rodada":"rodadas"} sem jogar · volta na ${VR[k]+1}ª</small></span><div class="stp"><button type="button" data-vr="${k}" data-d="-1" aria-label="Menos">−</button><b>${VR[k]}</b><button type="button" data-vr="${k}" data-d="1" aria-label="Mais">+</button></div></div>`).join("")}
+$("#vRounds").addEventListener("click",e=>{const b=e.target.closest("[data-vr]");if(!b)return;const k=b.dataset.vr;VR[k]=Math.max(1,Math.min(9,VR[k]+(+b.dataset.d)));play("tap");drawVR()});
 $("#valClose").onclick=closeSheets;
 $("#hideRuleBtn").onclick=()=>{
   if(!iAmBanker())return;
@@ -1131,6 +1194,7 @@ $("#valSave").onclick=()=>{
   if(!saldo){toast("Coloque o saldo inicial.");play("err");return}
   closeSheets();
   enqueue({t:"valores",saldo,salario,por:L.me,em:nowIso()});
+  if(VR.cadeia!==(L.mesa.rcadeia||2)||VR.ferias!==(L.mesa.rferias||1)){enqueue({t:"rodadas",cadeia:VR.cadeia,ferias:VR.ferias,por:L.me,em:nowIso()});L.mesa.rcadeia=VR.cadeia;L.mesa.rferias=VR.ferias}
   L.mesa.saldo_inicial=saldo;L.mesa.salario=salario;render();
   play("go");toast("Valores da mesa atualizados: início "+money(saldo)+", partida "+money(salario));
 };
@@ -1353,6 +1417,8 @@ function drawPlayer(){
   $("#plSet").hidden=!boss;
   $("#plBoss").hidden=!boss;
   $("#shJail").querySelectorAll("button").forEach(b=>{const v=b.dataset.sit||null;b.hidden=(v===(p.situacao||null))});
+  {const el=$("#plRounds");el.hidden=!p.situacao||!(boss||self);
+   if(p.situacao)setHTML(el,`<span>${p.situacao==="ferias"?"De férias":"Na cadeia"} · <b>${roundsTxt(p)}</b></span><button class="btn small" type="button" data-vez="${esc(a)}">${self?"Passar a vez":"Passou a vez"}</button>`)}
   const rm=$("#shRemove");rm.hidden=!(boss&&proxy);
   if(!rm.dataset.arm)rm.textContent="Remover "+(p.nome||"")+" da mesa";
 }
@@ -1429,7 +1495,7 @@ $("#shGo").onclick=()=>{
     msg="Saldo de "+an+" ajustado para "+money(amt);snd="recv";
   }else return;
   closeSheets();
-  if(r.status==="pendente"){play("ask");toast("Pedido enviado ao banqueiro: + "+money(amt),{label:"Cancelar",run:()=>estornar(r.id)});return}
+  if(r.status==="pendente"){play("ask");toast(SH.kind==="pay"?"Cobrança enviada: "+an+" confirma no celular":"Pedido enviado ao banqueiro: + "+money(amt),{label:"Cancelar",run:()=>estornar(r.id)});return}
   const after=balances(derive())[a];
   if(SH.kind==="pay"&&SH.to==="bank"){bancoComeu(an,amt);toast(msg,{label:"Desfazer",run:()=>estornar(r.id)});return}
   if(before>=0&&after<0){play("broke");toast(an+" ficou no vermelho!",{label:"Desfazer",run:()=>estornar(r.id)})}
@@ -1557,7 +1623,7 @@ function bumpTry(again){
     const after=balances(derive())[P.actor];
     if(before>=0&&after<0)play("broke");else play("pay");
     if(P.actor===L.me)flashCard();
-    toast("Pago: "+money(P.amt)+" para "+nameOf(to),{label:"Desfazer",run:()=>estornar(r.id)});
+    toast(r.status==="pendente"?"Cobrança enviada: "+nameOf(P.actor)+" confirma no celular":"Pago: "+money(P.amt)+" para "+nameOf(to),{label:r.status==="pendente"?"Cancelar":"Desfazer",run:()=>estornar(r.id)});
     return;
   }
   bumpClose();play("recv");
@@ -1631,7 +1697,7 @@ function miniCard(c,t,D){
     <span class="mfoot">${cardOwnerHTML(t,D)}${!t.dono&&(t.oferta||t.pedido)?"":`<span class="msep"></span>${housesHTML(c,t)}`}</span>${t.hipotecada?'<span class="mhip">HIPOTECADA</span>':""}</button>`;
 }
 function openCards(filter){
-  closeSheets();cdFilter=filter||"all";cdOpen=null;
+  closeSheets();cdFilter=filter||"free";cdOpen=null;
   $("#scrim").hidden=false;$("#cardsSheet").hidden=false;$("#cdBody").scrollTop=0;drawCards();
   if(titOff)toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");
 }
@@ -1642,23 +1708,47 @@ function drawCards(){
   const free=Object.keys(CARDS).filter(id=>!Tit(+id).dono).length;
   $("#cdSub").textContent=`${free} livres no banco • ${28-free} com jogadores`;
   $("#cdDrop").hidden=!people.length;
-  $("#cdHint").textContent=boss?"Segure uma carta e arraste até quem comprou · toque no nome para ver as cartas":"Quer comprar? Segure uma carta livre e arraste até você. O banqueiro autoriza · toque no nome para ver as cartas";
+  $("#cdHint").textContent=boss?"Solte a carta em cima de quem comprou":"Solte a carta em cima de você para pedir a compra";
   if(people.length){
     if(cdOpen&&!D.P[cdOpen])cdOpen=null;
     $("#cdPpl").innerHTML=people.map(p=>`<button type="button" class="cdp${cdOpen===p.id?" open":""}" data-drop="${esc(p.id)}" aria-expanded="${cdOpen===p.id}" style="--pc2:${colorOf(p.cor).c}">${avatar(p)}<span class="n">${esc(shortName(p.nome))}</span><span class="c">${count(p.id)} ${count(p.id)===1?"carta":"cartas"}</span></button>`).join("");
     drawOwned(D);
   }
-  if(cdFilter!=="all"&&cdFilter!=="free"&&cdFilter!=="mine"&&!D.P[cdFilter])cdFilter="all";
-  const chips=[["all","Todas"],["free","Livres"],["mine","Minhas"]].map(([k,l])=>`<button type="button" data-cf="${k}" aria-pressed="${cdFilter===k}">${l}</button>`).join("")
-    +people.filter(p=>p.id!==L.me).map(p=>`<button type="button" data-cf="${esc(p.id)}" aria-pressed="${cdFilter===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("");
-  $("#cdFilter").innerHTML=chips;
-  const ok=t=>cdFilter==="all"||(cdFilter==="free"&&!t.dono)||(cdFilter==="mine"&&t.dono===L.me)||t.dono===cdFilter;
-  const cs=GRUPOS.flatMap(g=>g.ids).filter(id=>ok(Tit(id)));
-  const html=cs.length?`<div class="cdgrid">${cs.map(id=>miniCard(CARDS[id],Tit(id),D)).join("")}</div>`:"";
-  $("#cdGroups").innerHTML=html||'<p class="empty">Nenhuma carta aqui.</p>';
+  if(!["all","free","mine","others"].includes(cdFilter)&&!D.P[cdFilter])cdFilter="free";
+  const all=GRUPOS.flatMap(g=>g.ids);
+  const nFree=all.filter(id=>!Tit(id).dono).length,nMine=all.filter(id=>Tit(id).dono===L.me).length,nOth=all.filter(id=>Tit(id).dono&&Tit(id).dono!==L.me).length;
+  const person=D.P[cdFilter]?cdFilter:null;
+  const seg=[["free","Livres",nFree],["mine","Minhas",nMine],["others","Dos outros",nOth],["all","Todas",28]].map(([k,l,n])=>`<button type="button" data-cf="${k}" aria-pressed="${cdFilter===k||(k==="others"&&!!person)}"><b>${l}</b><small>${n}</small></button>`).join("");
+  const ppl=cdFilter==="others"||person?`<div class="fchips cdwho">${people.filter(p=>p.id!==L.me).map(p=>`<button type="button" data-cf="${esc(p.id)}" aria-pressed="${cdFilter===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))} · ${count(p.id)}</button>`).join("")}</div>`:"";
+  const hint=cdFilter==="free"?`<p class="cdtip">${boss?"Toque numa carta para vender, ou segure e arraste até quem comprou.":"Toque numa carta para pedir a compra ao banqueiro."}</p>`:cdFilter==="others"||person?`<p class="cdtip">Caiu na casa de alguém? Toque na carta e use <b>Pagar aluguel</b>. Para negociar, <b>Propor troca</b>.</p>`:cdFilter==="mine"?`<p class="cdtip">Toque numa carta para cobrar aluguel, construir, hipotecar ou trocar.</p>`:"";
+  setHTML($("#cdFilter"),`<div class="cdseg">${seg}</div>${ppl}${hint}`);
+  const ok=t=>cdFilter==="all"||(cdFilter==="free"&&!t.dono)||(cdFilter==="mine"&&t.dono===L.me)||(cdFilter==="others"&&t.dono&&t.dono!==L.me)||(person&&t.dono===person);
+  const cs=all.filter(id=>ok(Tit(id)));
+  const empty=cdFilter==="mine"?'<p class="empty">Você ainda não tem cartas. Veja as <button class="link" data-cf="free" type="button">cartas livres</button>.</p>':'<p class="empty">Nenhuma carta aqui.</p>';
+  const html=cs.length?`<div class="cdgrid">${cs.map(id=>miniCard(CARDS[id],Tit(id),D)).join("")}</div>`:empty;
+  if(!setHTML($("#cdGroups"),html))return;
   fitNames($("#cdGroups"));
-  if(!b3.ptrs.size&&!b3full())drawBoard3d();
 }
+/* tela inicial: as cartas da pessoa sempre à mão */
+function drawMyCards(D){
+  const art=window.PB_ART||{icon:()=>""};
+  const order=GRUPOS.flatMap(g=>g.ids);
+  const ids=order.filter(id=>{const t=D.Tit[id];return t&&t.dono===L.me});
+  const owed=new Set(txArr(D).filter(t=>t.status==="pendente"&&t.para===L.me&&t.de).map(t=>t.motivo));
+  const others=order.some(id=>{const t=D.Tit[id];return t&&t.dono&&t.dono!==L.me});
+  const tiles=ids.map(id=>{const c=CARDS[id],t=D.Tit[id],hp=t.casas_hip||0;
+    const rent=t.hipotecada?"hipotecada":c.acao?`dados × ${short(c.mult)}`:money(c.al[rentLvl(t)]);
+    const houses=c.acao?'<span class="myh">ação</span>':t.casas>=5?`<span class="myh condo${hp?" hipd":""}">condomínio</span>`:`<span class="myh">${[1,2,3,4].map(i=>`<i class="${t.casas>=i?(i>t.casas-hp?"on hipd":"on"):""}"></i>`).join("")}</span>`;
+    return `<button type="button" class="myc${t.hipotecada?" hip":""}" data-mycard="${id}" style="--gc:${c.acao?"#3a3a46":c.cor}"><span class="myb"><span class="myi">${art.icon(id)}</span><b>${esc(c.nome)}</b></span><span class="myr"><small>${t.hipotecada?"":"aluguel"}</small>${rent}</span>${houses}${owed.has(("Aluguel: "+c.nome).slice(0,40))?'<span class="myw">cobrando</span>':""}</button>`}).join("");
+  const pay=others?`<button type="button" class="myc paytile" data-mypay="1"><span class="myb"><span class="myi"><svg viewBox="0 0 24 24"><path d="M3 7h18v11H3z"/><path d="M3 11h18M7 15h4"/></svg></span><b>Pagar aluguel</b></span><span class="myr"><small>caí na casa</small>de alguém</span></button>`:"";
+  const none=ids.length?"":`<button type="button" class="myc freetile" data-myfree="1"><span class="myb"><b>Sem cartas ainda</b></span><span class="myr"><small>comprar do banco</small>ver cartas livres</span></button>`;
+  $("#myCards").hidden=false;
+  $("#myCardsSub").textContent=ids.length?`${ids.length} ${ids.length===1?"carta":"cartas"} · toque para cobrar, construir, hipotecar ou trocar`:"Quando você comprar, suas cartas aparecem aqui";
+  setHTML($("#myCardsRow"),pay+tiles+none);
+}
+$("#myCardsRow").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;play("tap");
+  if(b.dataset.mycard)openCard(+b.dataset.mycard);else if(b.dataset.mypay)openCards("others");else if(b.dataset.myfree)openCards("free")});
+$("#myCardsAll").onclick=()=>{play("tap");openCards("mine")};
 /* banqueiro: toque no nome da pessoa para ver (ou esconder) as cartas dela */
 function ownChip(c,t){
   const info=!t.dono?(t.oferta?"Esperando confirmar":"Esperando o banqueiro"):t.hipotecada?"Hipotecada":c.acao?`Dados × ${short(c.mult)}`:t.casas>=5?"Condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:money(c.preco);
@@ -1684,9 +1774,10 @@ $("#cdPpl").addEventListener("click",e=>{
   cdOpen=cdOpen===b.dataset.drop?null:b.dataset.drop;play("tap");drawCards();
 });
 $("#cdOwn").addEventListener("click",e=>{const b=e.target.closest("[data-ocard]");if(!b)return;play("tap");openCard(+b.dataset.ocard)});
-$("#aCards").onclick=()=>{play("tap");openCards("all")};
+$("#aCards").onclick=()=>{play("tap");openCards()};
 $("#cdClose").onclick=closeSheets;
-$("#cdFilter").addEventListener("click",e=>{const b=e.target.closest("[data-cf]");if(!b)return;cdFilter=b.dataset.cf;play("tap");drawCards()});
+$("#cdFilter").addEventListener("click",e=>{const b=e.target.closest("[data-cf]");if(!b)return;cdFilter=b.dataset.cf;play("tap");drawCards();$("#cdBody").scrollTop=0});
+$("#cdGroups").addEventListener("click",e=>{const b=e.target.closest("button[data-cf]");if(!b)return;e.stopPropagation();cdFilter=b.dataset.cf;play("tap");drawCards()});
 $("#cdGroups").addEventListener("click",e=>{const b=e.target.closest("[data-card]");if(!b||cdDragJust)return;play("tap");openCard(+b.dataset.card)});
 
 /* banker: hold a free card and drag it onto a player */
@@ -1750,36 +1841,51 @@ document.addEventListener("touchmove",e=>{if(cdDrag)e.preventDefault()},{passive
 document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest(".mcard"))e.preventDefault()});
 
 /* one card in detail */
-function openCard(id){
-  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;ccSale=null;ccSalePrice="";ccBuild=null;ccHipN=null;tp={dir:"nada",val:0};
+function openCard(id,tab){
+  ccTab=tab||null;cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;ccSale=null;ccSalePrice="";ccBuild=null;ccHipN=null;tp={dir:"nada",val:0};
   $("#cardSheet").hidden=false;$("#scrim").hidden=false;$("#ccBody").scrollTop=0;drawCard();
 }
 function closeCard(){$("#cardSheet").hidden=true;$("#cardSheet").classList.remove("over3d");if($("#cardsSheet").hidden)$("#scrim").hidden=true}
 $("#ccClose").onclick=closeCard;
 $("#ccBody").addEventListener("input",e=>{if(e.target.id!=="tpVal")return;const raw=e.target.value.replace(/\D/g,"");tp.val=raw?+raw:0;e.target.value=tp.val?"$ "+tp.val.toLocaleString("pt-BR"):"";const c=CARDS[cdCard],D=derive();const el=$("#tpSum");if(el)el.innerHTML=tpSummary(c,D.Tit[c.id]||blankTit(c.id),D)});
+const CCTAB_IC={
+  pagar:'<svg viewBox="0 0 24 24"><path d="M3 7h18v11H3z"/><path d="M3 11h18M7 15h4"/></svg>',
+  cobrar:'<svg viewBox="0 0 24 24"><path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.8 5 3.5 5 1.6 5 3.5-2.2 3-5 3-5-1.1-5-3"/></svg>',
+  construir:'<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>',
+  hipoteca:'<svg viewBox="0 0 24 24"><path d="M5 10h14v10H5zM8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v2"/></svg>',
+  vender:'<svg viewBox="0 0 24 24"><path d="M3 12 12 3h8v8l-9 9z"/><circle cx="16" cy="7" r="1.5"/></svg>',
+  troca:'<svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>',
+  banco:'<svg viewBox="0 0 24 24"><path d="M3 10 12 4l9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>'
+};
+var ccTab=null;
 function drawCard(){
   const c=CARDS[cdCard];if(!c)return;
   const D=derive(),t=D.Tit[c.id]||blankTit(c.id),boss=iAmBanker(),me=L.me,owner=t.dono&&D.P[t.dono],mine=t.dono===me;
   $("#cardSheet").style.setProperty("--gc",c.acao?"#2A2A33":c.cor);
   $("#ccName").textContent=c.nome;$("#ccCountry").textContent=c.pais;
   let h="";
-  /* who has it */
-  if(owner&&t.venda_para)h+=`<div class="ccown sale">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""} está vendendo para ${esc(nameOf(t.venda_para,D))}<small>Por ${money(t.venda_preco||0)} · esperando ${t.venda_para===me?"você":"a pessoa"} confirmar</small></div></div>`;
-  else if(owner)h+=`<div class="ccown">${avatar(owner)}<div>${esc(owner.nome)}${mine?" (você)":""}<small>${t.hipotecada?"Hipotecada · não cobra aluguel":c.acao?"Dono da ação":t.casas>=5?"Com condomínio":t.casas?`${t.casas} ${t.casas>1?"casas":"casa"}`:"Sem casas"}${t.casas_hip&&!t.hipotecada?` · ${t.casas_hip} ${t.casas_hip>1?"hipotecadas":"hipotecada"}`:""}</small></div></div>`;
-  else if(t.pedido&&!t.oferta){const p=D.P[t.pedido];h+=`<div class="ccown">${p?avatar(p):""}<div>${t.pedido===me?"Você pediu esta carta":"Pedida por "+esc(p?p.nome:"?")}<small>Esperando o banqueiro autorizar a compra de ${money(c.preco)}</small></div></div>`}
-  else if(t.oferta){const p=D.P[t.oferta];h+=`<div class="ccown">${p?avatar(p):""}<div>Oferecida a ${esc(p?p.nome:"?")}<small>Esperando confirmar a compra de ${money(c.preco)}</small></div></div>`}
-  else h+=`<div class="ccown"><div>Livre no banco<small>Preço ${money(c.preco)}</small></div></div>`;
-  /* values */
-  if(c.acao){
-    h+=`<div class="rtable"><div class="sep"><span>Preço</span><span>${money(c.preco)}</span></div><div class="${owner&&!t.hipotecada?"now":""}"><span>Soma dos dados ×</span><span>${money(c.mult)}</span></div><div class="sep"><span>Hipoteca</span><span>${money(c.hip)}</span></div></div>`;
-  }else{
-    const lb=["Aluguel","1 casa","2 casas","3 casas","4 casas","Condomínio"];
-    h+=`<div class="rtable"><div class="sep"><span>Preço</span><span>${money(c.preco)}</span></div>${c.al.map((v,i)=>`<div class="${owner&&!t.hipotecada&&rentLvl(t)===i?"now":""}"><span>${lb[i]}</span><span>${money(v)}</span></div>`).join("")}<div class="sep"><span>Casa / condomínio</span><span>${money(c.casa)}</span></div><div class="sep"><span>Hipoteca</span><span>${money(c.hip)}</span></div></div>`;
-  }
-  /* actions */
-  let a="";
   const slide=(act,label,sub,tone,extra)=>`<div class="slide ${tone||""}" data-sl="${act}"${extra||""}><div class="sl-fill"></div><span class="sl-txt">${label}${sub?`<small>${sub}</small>`:""}</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`;
   const tile=(title,body)=>`<div class="ctile"><h4>${title}</h4>${body}</div>`;
+  /* summary: who has it and what the rent is right now */
+  const rentNow=owner&&!t.hipotecada?(c.acao?`dados × ${money(c.mult)}`:money(c.al[rentLvl(t)])):null;
+  const status=[];
+  if(owner){
+    if(t.hipotecada)status.push('<span class="cst hip">Hipotecada</span>');
+    if(!c.acao&&t.casas>=5)status.push('<span class="cst">Condomínio</span>');else if(!c.acao&&t.casas)status.push(`<span class="cst">${t.casas} ${t.casas>1?"casas":"casa"}</span>`);
+    if(t.casas_hip&&!t.hipotecada)status.push(`<span class="cst hip">${t.casas_hip} ${t.casas_hip>1?"construções hipotecadas":"construção hipotecada"}</span>`);
+  }
+  if(owner)h+=`<div class="ccsum">${avatar(owner)}<div class="who"><b>${mine?"Sua carta":esc(owner.nome)}</b><span>${status.join("")||'<span class="cst">'+(c.acao?"Ação":"Sem casas")+"</span>"}</span></div><div class="rnow"><small>${t.hipotecada?"Aluguel":"Aluguel agora"}</small><b>${rentNow||"não cobra"}</b></div></div>`;
+  else if(t.pedido&&!t.oferta){const p=D.P[t.pedido];h+=`<div class="ccown">${p?avatar(p):""}<div>${t.pedido===me?"Você pediu esta carta":"Pedida por "+esc(p?p.nome:"?")}<small>Esperando o banqueiro autorizar a compra de ${money(c.preco)}</small></div></div>`}
+  else if(t.oferta){const p=D.P[t.oferta];h+=`<div class="ccown">${p?avatar(p):""}<div>Oferecida a ${esc(p?p.nome:"?")}<small>Esperando confirmar a compra de ${money(c.preco)}</small></div></div>`}
+  else h+=`<div class="ccsum free"><div class="who"><b>Livre no banco</b><span><span class="cst">Ninguém tem ainda</span></span></div><div class="rnow"><small>Preço</small><b>${money(c.preco)}</b></div></div>`;
+  if(owner&&t.venda_para)h+=`<div class="ccown sale"><div>${mine?"Você":esc(shortName(owner.nome))} ${mine?"está":"está"} vendendo para ${esc(nameOf(t.venda_para,D))}<small>Por ${money(t.venda_preco||0)} · esperando ${t.venda_para===me?"você":"a pessoa"} confirmar</small></div></div>`;
+  /* rent table, folded when the card has an owner */
+  const lb=["Sem casa","1 casa","2 casas","3 casas","4 casas","Condomínio"];
+  const table=c.acao?`<div class="rtable"><div class="sep"><span>Preço</span><span>${money(c.preco)}</span></div><div class="${owner&&!t.hipotecada?"now":""}"><span>Soma dos dados ×</span><span>${money(c.mult)}</span></div><div class="sep"><span>Hipoteca</span><span>${money(c.hip)}</span></div></div>`
+    :`<div class="rtable"><div class="sep"><span>Preço</span><span>${money(c.preco)}</span></div>${c.al.map((v,i)=>`<div class="${owner&&!t.hipotecada&&rentLvl(t)===i?"now":""}"><span>${lb[i]}</span><span>${money(v)}</span></div>`).join("")}<div class="sep"><span>Casa / condomínio</span><span>${money(c.casa)}</span></div><div class="sep"><span>Hipoteca</span><span>${money(c.hip)}</span></div></div>`;
+  h+=owner?`<details class="rtd"><summary>Tabela de aluguel e valores</summary>${table}</details>`:table;
+  let a="";
+  /* free card: buy flows, no tabs */
   if(!t.dono){
     if(t.pedido&&boss&&t.pedido!==me)a+=tile(`Pedido de ${esc(shortName(nameOf(t.pedido,D)))}`,slide("autorizar",`Arraste para autorizar`,`${esc(shortName(nameOf(t.pedido,D)))} paga ${money(c.preco)} ao banco`,"buy")+`<button class="btn ghost small" data-cc="recusar" type="button">Recusar o pedido</button>`);
     else if(t.pedido===me&&!boss)a+=tile("Seu pedido",`<p class="ccnote">O banqueiro precisa autorizar. Quando ele autorizar, ${money(c.preco)} sai do seu saldo.</p><button class="btn ghost small" data-cc="recusar" type="button">Cancelar meu pedido</button>`);
@@ -1792,10 +1898,37 @@ function drawCard(){
         (ccSell?slide("ofertar",`Arraste para vender a ${esc(shortName(nameOf(ccSell,D)))}`,money(c.preco)+" · a pessoa confirma no celular","buy",` data-to="${esc(ccSell)}"`):`<p class="ccnote">Escolha quem comprou. Na lista de cartas você também pode segurar a carta e arrastar até a pessoa.</p>`)+
         (t.oferta?`<button class="btn ghost small" data-cc="recusar" type="button">Cancelar a oferta para ${esc(shortName(nameOf(t.oferta,D)))}</button>`:""));
     }
-  }else{
+  }
+  if(t.dono){
     if(t.venda_para===me)a+=tile(`${esc(shortName(nameOf(t.dono,D)))} quer te vender`,slide("aceitar_venda","Arraste para comprar",`Paga ${money(t.venda_preco||0)} para ${esc(shortName(nameOf(t.dono,D)))}`,"buy")+`<button class="btn ghost small" data-cc="recusar" type="button">Não quero</button>`);
   }
-  if(t.dono&&(mine||boss)){
+  if(t.dono){
+    /* tabs: only what this person can do with this card */
+    const tabs=[];
+    const canAdmin=mine||boss;
+    if(!mine&&!t.hipotecada)tabs.push(["pagar","Pagar aluguel"]);
+    if(canAdmin&&!t.hipotecada)tabs.push(["cobrar","Cobrar aluguel"]);
+    if(canAdmin&&!c.acao)tabs.push(["construir","Construir"]);
+    if(canAdmin)tabs.push(["hipoteca","Hipotecar"]);
+    if(canAdmin)tabs.push(["vender","Vender"]);
+    if(D.P[me])tabs.push(["troca",mine?"Trocar":"Propor troca"]);
+    if(boss)tabs.push(["banco","Banqueiro"]);
+    if(!tabs.some(x=>x[0]===ccTab))ccTab=tabs.length?tabs[0][0]:null;
+    if(tabs.length>1)a+=`<div class="cctabs n${tabs.length}">${tabs.map(([k,l])=>`<button type="button" data-cct="${k}" aria-pressed="${ccTab===k}">${CCTAB_IC[k]}<span>${l}</span></button>`).join("")}</div>`;
+    if(ccTab==="pagar"){
+      const val=rentOf(c,t,ccDice);
+      a+=tile(`Caí aqui · pagar para ${esc(shortName(owner.nome))}`,(c.acao?`<p class="tlab">Quanto deu nos dados?</p><div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dice="${n}" aria-pressed="${ccDice===n}">${n}</button>`).join("")}</div>`:"")+
+        (val>0?slide("pagar_aluguel",`Arraste para pagar ${money(val)}`,`para ${esc(owner.nome)} · aluguel de ${esc(c.nome)}`,"rent"):`<p class="ccnote">Escolha a soma dos dados.</p>`));
+    }
+    if(ccTab==="cobrar"){
+      const others=playersArr(D).filter(p=>p.id!==t.dono);
+      if(ccPayer&&!D.P[ccPayer])ccPayer=null;
+      const val=rentOf(c,t,ccDice),direct=ccPayer&&!needsApproval(ccPayer,t.dono,me);
+      a+=tile("Cobrar aluguel · quem caiu aqui?",`<div class="fchips">${others.map(p=>`<button type="button" data-payer="${esc(p.id)}" aria-pressed="${ccPayer===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>
+        ${c.acao?`<div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dice="${n}" aria-pressed="${ccDice===n}">${n}</button>`).join("")}</div>`:""}
+        ${ccPayer&&val>0?slide("cobrar",`Arraste para cobrar ${money(val)} de ${esc(shortName(nameOf(ccPayer,D)))}`,direct?`lançado pelo banqueiro para ${esc(shortName(owner.nome))}`:`${esc(shortName(nameOf(ccPayer,D)))} confirma no celular dele`,"rent"):`<p class="ccnote">${c.acao&&!ccDice&&ccPayer?"Escolha a soma dos dados.":"Escolha quem caiu aqui. A pessoa confirma o pagamento no celular dela."}</p>`}`);
+    }
+    if(ccTab==="construir"){
     if(!c.acao){
       const can=!t.hipotecada&&t.casas<5,tgt=can?Math.max(t.casas+1,Math.min(5,ccBuild||t.casas+1)):t.casas,n=tgt-t.casas;
       const gg=groupGap(D.Tit,c,t.dono),gname=(GRUPOS.find(x=>x.k===c.g)||{}).n||"",pickable=can&&gg.ok;
@@ -1805,6 +1938,8 @@ function drawCard(){
       a+=tile("Construção",`<div class="chouses">${hs}</div>`+(t.hipotecada?`<p class="ccnote">Pague a hipoteca para voltar a construir.</p>`:!gg.ok&&t.casas<5?`<p class="ccnote grp">${gg.missing.length?`Para construir, junte a cor ${esc(gname.toLowerCase())} inteira. Falta: <b>${gg.missing.map(id=>esc(CARDS[id].nome)+((D.Tit[id]||{}).dono?` (de ${esc(shortName(nameOf(D.Tit[id].dono,D)))})`:" (livre)")).join(", ")}</b>.`:`Pague a hipoteca de <b>${gg.hip.map(id=>esc(CARDS[id].nome)).join(", ")}</b> para construir nesta cor.`}</p>`:t.casas>=5?`<p class="ccnote">Já tem condomínio. Aluguel máximo: ${money(c.al[5])}.</p>`:
         `<p class="ccnote" style="text-align:center">Toque nas casinhas para escolher quantas construir de uma vez.</p>`+slide("construir",`Arraste para construir`,`${what} · paga ${money(c.casa*n)}`,"build",` data-n="${n}"`)+`<p class="ccnote" style="text-align:center">Aluguel vai para <b>${money(c.al[tgt])}</b></p>`));
     }
+    }
+    if(ccTab==="hipoteca"){
     {
       let hb="";
       if(!c.acao&&t.casas>0){
@@ -1819,8 +1954,11 @@ function drawCard(){
         }
         if(hp>0)hb+=slide("resgatar_casas",`Arraste para pagar a hipoteca ${hp===1?"da casa":`das ${hp} casas`}`,`Paga ${money(hp*u)} · aluguel volta para ${money(c.al[t.casas])}`,"pay",` data-n="${hp}"`);
       }
-      a+=tile("Hipoteca",(t.hipotecada?slide("resgatar","Arraste para pagar a hipoteca",`Paga ${money(c.hip)} ao banco`,"pay"):slide("hipotecar","Arraste para hipotecar",`Recebe ${money(c.hip)} do banco · para de cobrar aluguel`,"hip"))+hb);
+      a+=tile("Hipoteca · dinheiro do banco agora",(t.hipotecada?slide("resgatar","Arraste para pagar a hipoteca",`Paga ${money(c.hip)} ao banco`,"pay"):slide("hipotecar","Arraste para hipotecar",`Recebe ${money(c.hip)} do banco · para de cobrar aluguel`,"hip"))+hb);
     }
+      a+=`<p class="ccnote">Para pagar uma dívida: hipoteque a carta ou só as construções. Para tirar a hipoteca, você paga o mesmo valor de volta.</p>`;
+    }
+    if(ccTab==="vender"){
     {
       const others=playersArr(D).filter(p=>p.id!==t.dono);
       if(t.venda_para)a+=tile("Venda para outro jogador",`<p class="ccnote">Oferecida a ${esc(nameOf(t.venda_para,D))} por ${money(t.venda_preco||0)}. Quando a pessoa confirmar no celular, o dinheiro cai para ${mine?"você":esc(shortName(nameOf(t.dono,D)))}.</p><button class="btn ghost small" data-cc="recusar" type="button">Cancelar a venda</button>`);
@@ -1831,20 +1969,14 @@ function drawCard(){
           (ccSale?`<label class="saleprice">Preço combinado<input class="inp num" id="ccSalePrice" inputmode="numeric" autocomplete="off" value="${pr?pr.toLocaleString("pt-BR"):""}"></label>`+slide("vender",`Arraste para oferecer a ${esc(shortName(nameOf(ccSale,D)))}`,`por ${money(pr||0)} · a pessoa confirma no celular`,"buy",` data-to="${esc(ccSale)}"`):`<p class="ccnote">Escolha quem vai comprar e combine o preço. A carta vai com as casas e a hipoteca que tiver.</p>`));
       }
     }
+    }
+    if(ccTab==="troca")a+=tradeTile(c,t,D);
+    if(ccTab==="banco"){
     if(boss)a+=tile("Banqueiro",(t.casas>0?`<button class="btn ghost small" data-cc="tirar_casa" type="button">Tirar 1 ${t.casas>=5?"(condomínio)":"casa"} · sem mexer no dinheiro</button>`:"")+slide("devolver","Arraste para devolver ao banco","A carta fica livre","danger"));
+    }
   }
   if(a)h+=a;
-  /* charge rent */
-  if(owner&&!t.hipotecada){
-    const others=playersArr(D).filter(p=>p.id!==t.dono);
-    if(ccPayer&&!D.P[ccPayer])ccPayer=null;
-    const val=rentOf(c,t,ccDice);
-    h+=`<div class="ctile"><h4>Cobrar aluguel · quem caiu aqui?</h4><div class="fchips">${others.map(p=>`<button type="button" data-payer="${esc(p.id)}" aria-pressed="${ccPayer===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>
-      ${c.acao?`<div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dice="${n}" aria-pressed="${ccDice===n}">${n}</button>`).join("")}</div>`:""}
-      ${ccPayer&&val>0?`<div class="slide rent" data-sl="cobrar"><div class="sl-fill"></div><span class="sl-txt">Arraste: ${esc(shortName(nameOf(ccPayer,D)))} paga ${money(val)}<small>para ${esc(owner.nome)}</small></span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`:`<p class="ccnote">${c.acao&&!ccDice&&ccPayer?"Escolha a soma dos dados.":"Escolha quem caiu aqui."}</p>`}</div>`;
-  }
-  h+=tradeTile(c,t,D);
-  $("#ccBody").innerHTML=h;
+  setHTML($("#ccBody"),h);
 }
 $("#ccBody").addEventListener("input",e=>{
   if(e.target.id!=="ccSalePrice")return;
@@ -1853,6 +1985,7 @@ $("#ccBody").addEventListener("input",e=>{
 });
 $("#ccBody").addEventListener("click",e=>{
   const lv=e.target.closest("[data-lvl]");if(lv){ccBuild=+lv.dataset.lvl;play("tap");drawCard();return}
+  const ct=e.target.closest("[data-cct]");if(ct){ccTab=ct.dataset.cct;ccDice=0;play("tap");drawCard();return}
   const tb=e.target.closest("[data-tpara],[data-tget],[data-tgive],[data-tdir],[data-tadd],[data-tcancel]");
   if(tb){const d=tb.dataset;
     if(d.tpara!==undefined){tp.para=d.tpara;tp.get=null}
@@ -1891,7 +2024,7 @@ function tradeTile(c,t,D){
   if(open)return `<div class="ctile"><h4>Proposta de troca enviada</h4><p class="ccnote">Esperando ${esc(nameOf(open.para,D))} responder.</p><button class="btn ghost small" type="button" data-tcancel="${esc(open.id)}">Cancelar proposta</button></div>`;
   const others=playersArr(D).filter(p=>p.id!==L.me);if(!others.length)return"";
   const myCards=Object.values(D.Tit).filter(x=>x.dono===L.me&&x.carta!==c.id).map(x=>x.carta);
-  let h=`<div class="ctile"><h4>${mine?"Trocar ou vender a um jogador":"Quero esta carta · propor ao "+esc(shortName(owner(D,t).nome))}</h4>`;
+  let h=`<div class="ctile"><h4>${mine?"Trocar por carta de outro jogador":"Quero esta carta · propor a "+esc(shortName(owner(D,t).nome))}</h4><p class="ccnote">Carta por carta, com ou sem volta em dinheiro. A outra pessoa aceita no celular dela.</p>`;
   if(mine){
     if(tp.para&&!D.P[tp.para])tp.para=null;
     h+=`<div class="fchips">${others.map(p=>`<button type="button" data-tpara="${esc(p.id)}" aria-pressed="${tp.para===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>`;
@@ -1901,7 +2034,7 @@ function tradeTile(c,t,D){
   }else{
     h+=`<p class="tlab">Você dá alguma carta sua?</p><div class="fchips"><button type="button" class="tchip" data-tgive="" aria-pressed="${!tp.give}">Nenhuma</button>${myCards.map(id=>cardChip(id,"data-tgive",tp.give===id)).join("")}</div>`;
   }
-  h+=`<p class="tlab">E dinheiro?</p><div class="seg tseg"><button type="button" data-tdir="nada" aria-pressed="${tp.dir==="nada"}">Sem dinheiro</button><button type="button" data-tdir="recebo" aria-pressed="${tp.dir==="recebo"}">Eu recebo</button><button type="button" data-tdir="pago" aria-pressed="${tp.dir==="pago"}">Eu pago</button></div>`;
+  h+=`<p class="tlab">Tem volta em dinheiro?</p><div class="seg tseg"><button type="button" data-tdir="nada" aria-pressed="${tp.dir==="nada"}">Sem volta</button><button type="button" data-tdir="recebo" aria-pressed="${tp.dir==="recebo"}">Eu recebo</button><button type="button" data-tdir="pago" aria-pressed="${tp.dir==="pago"}">Eu dou</button></div>`;
   if(tp.dir!=="nada")h+=`<input class="amount tval" id="tpVal" inputmode="numeric" autocomplete="off" placeholder="$ 0" value="${tp.val?"$ "+tp.val.toLocaleString("pt-BR"):""}"><div class="fchips">${[50000,100000,200000,500000].map(v=>`<button type="button" data-tadd="${v}">+${short(v)}</button>`).join("")}<button type="button" data-tadd="0">Limpar</button></div>`;
   const other=mine?tp.para:t.dono;
   h+=`<p class="tsum" id="tpSum">${tpSummary(c,t,D)}</p>`;
@@ -1913,15 +2046,24 @@ function ccDo(k,to){
   const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
   if(k==="propor"){
     const mine=t.dono===L.me,para=mine?tp.para:t.dono;if(!para)return;
-    if(tp.dir!=="nada"&&!tp.val){toast("Digite o valor da troca ou escolha Sem dinheiro.");play("err");drawCard();return}
+    if(tp.dir!=="nada"&&!tp.val){toast("Digite o valor da volta ou escolha Sem volta.");play("err");drawCard();return}
     trocaOp("propor",{para,carta_de:mine?c.id:(tp.give||null),carta_para:mine?(tp.get||null):c.id,valor:tpValor()});
     play("ask");toast(`Proposta enviada a ${nameOf(para,D)}`);tp={dir:"nada",val:0};drawCard();return;
   }
   if(k==="cobrar"){
     const v=rentOf(c,t,ccDice);if(!ccPayer||!v)return;
-    const r=lancar(ccPayer,t.dono,v,("Aluguel: "+c.nome).slice(0,40));play("pay");
-    toast(`${nameOf(ccPayer,D)} pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});
+    const r=lancar(ccPayer,t.dono,v,("Aluguel: "+c.nome).slice(0,40));
+    if(r.status==="pendente"){play("ask");toast(`Cobrança enviada: ${nameOf(ccPayer,D)} confirma ${money(v)} no celular`,{label:"Cancelar",run:()=>estornar(r.id)})}
+    else{play("pay");toast(`${nameOf(ccPayer,D)} pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)})}
     ccPayer=null;ccDice=0;drawCard();return;
+  }
+  if(k==="pagar_aluguel"){
+    const v=rentOf(c,t,ccDice);if(!t.dono||t.dono===L.me||!v)return;
+    const before=balances(D)[L.me];
+    const r=lancar(L.me,t.dono,v,("Aluguel: "+c.nome).slice(0,40));
+    play(before>=v?"pay":"broke");flashCard();
+    toast(`Você pagou ${money(v)} de aluguel para ${nameOf(t.dono,D)}`,{label:"Desfazer",run:()=>estornar(r.id)});
+    ccDice=0;closeCard();return;
   }
   if(k==="vender"){
     if(!to)return;const pr=ccSalePrice===""?c.preco:parseAmt(ccSalePrice);
@@ -1972,6 +2114,7 @@ function slEnd(){
     s2.k.style.transform=`translateX(${s2.max}px)`;s2.sl.querySelector(".sl-fill").style.width="100%";s2.sl.classList.add("done");
     try{navigator.vibrate&&navigator.vibrate(30)}catch(err){}
     const act=s2.sl.dataset.sl,to=s2.sl.dataset.to;
+    for(let el=s2.sl;el;el=el.parentElement)if(el._h!==undefined)el._h=null;
     setTimeout(()=>{if(s2.sl.closest("#offerIn"))offerDo(act);else if(s2.sl.closest("#scBody"))scoreDo(act);else if(s2.sl.closest("#b3Land"))landDo(act);else ccDo(act,to)},180);
   }else{
     s2.k.style.transition="transform .25s";s2.sl.querySelector(".sl-fill").style.transition="width .25s";
@@ -1983,9 +2126,22 @@ document.addEventListener("pointerup",slEnd);document.addEventListener("pointerc
 document.addEventListener("touchmove",e=>{if(slState)e.preventDefault()},{passive:false});
 
 /* someone offered me a card: confirm on my phone */
-let offerShown=null,offerKind=null;var offerTrade=null;const reqSnooze=new Set();
+let offerShown=null,offerKind=null;var offerTrade=null,offerBill=null;const reqSnooze=new Set(),billSnooze=new Set();
 function drawOffer(D){
   const box=$("#offerBox");
+  const bill=L&&L.me?txArr(D).filter(t=>t.status==="pendente"&&t.de===L.me&&t.lancado_por!==L.me&&!t.pend&&!billSnooze.has(t.id)).sort((a,b)=>tms(a.feito_em)-tms(b.feito_em))[0]:null;
+  if(bill){
+    const key="b"+bill.id;if(offerShown===key&&!box.hidden)return;
+    offerShown=key;offerKind="cobranca";offerBill=bill.id;offerTrade=null;
+    const from=D.P[bill.para],bal=balances(D)[L.me]||0;
+    $("#offerIn").innerHTML=`<div class="ccband" style="--gc:#C8432B"><div><b>Cobrança</b><small>${esc(bill.motivo||"sem motivo")}</small></div></div>
+      <div class="obody"><p class="oreq">${from?avatar(from):""}<span><b>${esc(nameOf(bill.para,D))}</b> está te cobrando${bill.lancado_por!==bill.para?` (lançado por ${esc(shortName(nameOf(bill.lancado_por,D)))})`:""}</span></p><div class="oprice">${money(bill.valor)}</div>
+      <p>Seu saldo: ${money(bal)}${bill.valor>bal?" · vai ficar negativo":""}</p>
+      <div class="slide pay" data-sl="pagar_cobranca"><div class="sl-fill"></div><span class="sl-txt">Arraste para pagar</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>
+      <div class="obtns"><button class="btn ghost small" data-of="recusar_cobranca" type="button">Recusar</button><button class="btn ghost small" data-of="depois_cobranca" type="button">Depois</button></div></div>`;
+    box.hidden=false;return;
+  }
+  offerBill=null;
   const mine=L&&L.me?Object.values(D.Tit).find(t=>t.oferta===L.me&&!t.dono):null;
   const sale=!mine&&L&&L.me?Object.values(D.Tit).find(t=>t.venda_para===L.me&&t.dono&&t.dono!==L.me):null;
   if(sale){
@@ -2039,6 +2195,9 @@ function drawOffer(D){
   box.hidden=false;
 }
 function offerDo(k){
+  if(offerKind==="cobranca"&&offerBill){const id=offerBill;offerBill=null;offerShown=null;offerKind=null;$("#offerBox").hidden=true;
+    if(k==="pagar_cobranca")decide(id,true);else if(k==="recusar_cobranca")decide(id,false);else{billSnooze.add(id);play("tap");toast("A cobrança fica no topo da tela inicial.")}
+    render();return}
   if(offerKind==="troca"&&offerTrade&&(k==="aceitar"||k==="recusar_troca")){const id=offerTrade;offerTrade=null;$("#offerBox").hidden=true;offerKind=null;
     if(k==="aceitar"){trocaOp("aceitar",{id});play("go");flashCard();toast("Troca feita!")}else{trocaOp("recusar",{id});play("undo");toast("Troca recusada")}return}
   if(offerKind==="venda"){
@@ -2307,14 +2466,14 @@ function drawBoard3d(){
     h+=`<div class="b3t r${p.rot}${c.acao?" acao":" prop"}${own?" own":""}${t.hipotecada?" hip":""}${dim?" dim":""}${lp}" data-b3="${c.id}" data-sq="${i}" style="${style};--gc:${c.acao?"#3a3a46":c.cor};--oc:${oc}${c.acao?"":`;--sky:${skyline(c.id)}`}"><div class="b3in">${floor}<span class="b3nm">${esc(c.nome)}${c.acao?"":`<small>${esc(c.pais)}</small>`}</span><span class="b3pr">$${c.preco.toLocaleString("pt-BR")}</span></div>${extra}${pw}</div>`;
   });
   h+=`<div class="b3center"><span class="b3sr a">SORTE<i>ou</i>REVÉS</span><span class="b3sr b">SORTE<i>ou</i>REVÉS</span><div class="b3logo"><img src="logo.webp" alt=""><b>MUNDO</b></div></div>`;
-  $("#b3dBoard").innerHTML=h;
+  setHTML($("#b3dBoard"),h);
   /* legend */
   const ppl=playersArr(D),cnt=id=>Object.values(D.Tit).filter(t=>t.dono===id).length,free=Object.keys(CARDS).filter(id=>!(D.Tit[id]||{}).dono).length;
   $("#b3dLegend").innerHTML=`<div><button type="button" class="b3lp" data-hl="" aria-pressed="${!b3.hl}" style="--oc:#FFD12B"><span>Todos<small>28 cartas</small></span></button><button type="button" class="b3lp" data-hl="free" aria-pressed="${b3.hl==="free"}" style="--oc:#7ee08a"><span>Livres<small>${free} no banco</small></span></button>${ppl.map(p=>`<button type="button" class="b3lp" data-hl="${esc(p.id)}" aria-pressed="${b3.hl===p.id}" style="--oc:${colorOf(p.cor).c}">${avatar(p)}<span>${esc(shortName(p.nome))}<small>${cnt(p.id)} ${cnt(p.id)===1?"carta":"cartas"}</small></span></button>`).join("")}</div>`;
   b3cam();
 }
 function b3full(){return !$("#b3d").hidden}
-function b3hl(){if(b3full())return b3.hl;return cdFilter==="all"?null:cdFilter==="mine"?L.me:cdFilter}
+function b3hl(){return b3.hl}
 function b3cam(){
   const st=$("#b3dStage");if(!st)return;
   b3.fit=Math.min(st.clientWidth/(b3full()?800:780),st.clientHeight/(b3full()?740+b3.pitch*2:640+b3.pitch*1.6));
@@ -2325,13 +2484,12 @@ function b3cam(){
   document.querySelectorAll("#b3dBoard .b3pw").forEach(el=>el.style.transform=el.dataset.off+" "+bill);
 }
 function openBoard3d(){
-  b3.hl=cdFilter==="all"?null:cdFilter==="mine"?L.me:cdFilter;
+  b3.hl=cdFilter==="all"||cdFilter==="others"?null:cdFilter==="mine"?L.me:cdFilter;
   $("#b3d").hidden=false;$("#b3d").insertBefore($("#b3dStage"),document.querySelector(".b3dtools"));drawBoard3d();play("tap");
 }
-function closeBoard3d(){b3pickEnd(true);$("#b3d").hidden=true;$("#cdBoardHost").insertBefore($("#b3dStage"),$("#b3Expand"));if(!$("#cardsSheet").hidden){drawCards()}play("tap")}
+function closeBoard3d(){b3pickEnd(true);$("#b3d").hidden=true;$("#b3dBoard").innerHTML="";$("#b3dBoard")._h=null;play("tap")}
 $("#b3Expand").onclick=openBoard3d;
 $("#b3dClose").onclick=closeBoard3d;
-$("#cdBoardHost").insertBefore($("#b3dStage"),$("#b3Expand"));
 $("#b3dLegend").addEventListener("click",e=>{const b=e.target.closest("[data-hl]");if(!b)return;b3.hl=b.dataset.hl||null;play("tap");drawBoard3d()});
 document.querySelector(".b3dtools").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(!b)return;const v=b.dataset.v;
   if(v==="here"){if(b3.pick)b3pickEnd();else b3pickStart();play("tap");return}
@@ -2363,7 +2521,7 @@ else{
   if(saved&&saved.mesa&&API&&isStandalone())openMesa(last);else render();
 }
 window.addEventListener("hashchange",()=>{const h=(location.hash||"").replace("#","").toUpperCase();if(h.length===4&&API&&(!L||h!==L.codigo))openMesa(h)});
-window.PORTI_DEBUG={t:{openCard,closeCard,ccDo,offerDo,scoreDo,showFinal},state:()=>L,sync:syncNow,sound:()=>({on:soundOn,ready:soundReady,state:ac&&ac.state})};
+window.PORTI_DEBUG={render:()=>render(),t:{openCard,closeCard,ccDo,offerDo,scoreDo,showFinal},state:()=>L,sync:syncNow,sound:()=>({on:soundOn,ready:soundReady,state:ac&&ac.state})};
 })();
 
 ;["status-ferias.svg","status-preso.svg"].forEach(u=>{const im=new Image();im.src=u});

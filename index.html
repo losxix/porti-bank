@@ -1192,6 +1192,103 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
 .mhouses .condo.hipd{background:repeating-linear-gradient(135deg,#B8B0A2 0 4px,#8E8778 4px 8px);color:#252329}
 .mhouses .condo em{font-style:normal;margin-left:4px;font-size:9px;opacity:.85}
 .fchips.hipn{justify-content:flex-start}.fchips.hipn button{min-width:44px;justify-content:center;font-family:var(--mono);font-weight:700}
+/* cobrança para mim */
+.reqlist h2{margin:4px 0 -2px}
+.reqlist h2~h2{margin-top:10px}
+.rq.bill .amt{color:var(--neg)}
+.req.hasbill{border-color:var(--neg);box-shadow:0 0 0 3px color-mix(in oklab,var(--neg) 25%,transparent),4px 5px 0 var(--edge)}
+/* rodadas de cadeia / férias */
+#jailBanner{display:flex;gap:12px;align-items:center}
+#jailBanner[hidden]{display:none}
+.jbtxt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.35}
+.jbtxt b{font-size:14.5px}
+.jbvez{flex:none!important;width:auto!important;white-space:nowrap;padding:0 16px}
+.plrounds .btn{width:auto!important;flex:none;padding:0 14px}
+.plrounds{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1.5px solid var(--edge);border-radius:14px;background:var(--soft);font-size:14px;margin-bottom:10px}
+.plrounds[hidden]{display:none}
+.vrounds{display:flex;flex-direction:column;gap:10px}
+.vr{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--edge);border-radius:14px;background:var(--card,#fffdf6)}
+.vr img{width:30px;height:30px;flex:none}
+.vr>span{flex:1;min-width:0;display:flex;flex-direction:column;font-size:14px}
+.vr small{font-size:12px;color:var(--muted)}
+.stp{display:flex;align-items:center;gap:8px}
+.stp button{width:38px;height:38px;border-radius:12px;border:1.5px solid var(--edge);background:#FFD12B;color:#252329;font:800 20px/1 var(--body,system-ui);box-shadow:2px 2px 0 var(--edge);cursor:pointer}
+.stp b{min-width:18px;text-align:center;font:700 18px var(--mono,monospace)}
+/* detalhe da carta: resumo + abas de ação */
+.ccsum{display:flex;align-items:center;gap:11px;padding:12px;border-radius:16px;background:var(--surface);border:1.5px solid var(--edge);box-shadow:2px 3px 0 var(--shadow)}
+.ccsum .avatar{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;max-width:40px!important;max-height:40px!important;flex:0 0 40px!important;font-size:16px!important}
+.ccsum .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ccsum .who b{font-size:15.5px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ccsum .who>span{display:flex;flex-wrap:wrap;gap:4px}
+.cst{font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--soft);color:var(--ink);white-space:nowrap}
+.cst.hip{background:#E9DDF9;color:#4A2A7A}
+.rnow{display:flex;flex-direction:column;align-items:flex-end;text-align:right;flex:none}
+.rnow small{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.rnow b{font:700 19px var(--mono,ui-monospace,monospace);letter-spacing:-.5px;white-space:nowrap}
+.rtd{border-radius:14px}
+.rtd summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:12px;background:var(--soft);font-size:13px;font-weight:800;color:var(--muted)}
+.rtd summary::-webkit-details-marker{display:none}
+.rtd summary::after{content:"+";font-size:18px;line-height:1}
+.rtd[open] summary{margin-bottom:8px}.rtd[open] summary::after{content:"−"}
+.cctabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.cctabs.n2{grid-template-columns:repeat(2,minmax(0,1fr))}.cctabs.n3,.cctabs.n5,.cctabs.n6{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cctabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:70px;padding:8px 4px;border:1.5px solid var(--edge);border-radius:16px;background:var(--surface);color:var(--ink);font:inherit;font-size:12px;font-weight:800;line-height:1.15;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cctabs button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cctabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);box-shadow:2px 3px 0 var(--shadow);transform:translateY(-1px)}
+/* lista de cartas: abas simples, livres primeiro */
+.cdseg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:4px;border-radius:16px;background:var(--soft);border:1.5px solid var(--edge)}
+.cdseg button{display:flex;flex-direction:column;align-items:center;gap:1px;min-height:48px;padding:5px 2px;border:0;border-radius:12px;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+.cdseg button b{font-size:13px;font-weight:800;white-space:nowrap}
+.cdseg button small{font:600 11.5px var(--mono,monospace);color:var(--muted)}
+.cdseg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);box-shadow:inset 0 0 0 1.5px var(--edge),2px 2px 0 var(--edge)}
+.cdseg button[aria-pressed=true] small{color:var(--accent-ink)}
+.cdwho{margin-top:8px}
+.cdtip{margin:8px 2px 0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+#cdBoardHost{margin:2px 0 2px}
+.cdboardbtn{width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:16px;border:1.5px solid #000;background:linear-gradient(120deg,#2E2C38,#17161C);color:#FFF8E8;text-align:left;font:inherit;cursor:pointer;box-shadow:2px 3px 0 var(--shadow)}
+.cdboardbtn .bi{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:11px;background:#FFD12B;color:#252329;border:1.5px solid #000}
+.cdboardbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.cdboardbtn>span:nth-child(2){flex:1;min-width:0;display:flex;flex-direction:column}
+.cdboardbtn b{font-size:14.5px}.cdboardbtn small{font-size:12px;opacity:.75}
+.cdboardbtn .go{width:18px;height:18px;opacity:.7}
+/* faixa para soltar a carta só aparece enquanto arrasta */
+#cardsSheet .cddrop{display:none}
+body.cdragging #cardsSheet .cddrop{display:block;position:fixed;left:10px;right:10px;bottom:max(14px,env(safe-area-inset-bottom));z-index:70;padding:10px 10px 6px;border-radius:20px;background:var(--surface);border:2px solid var(--edge);box-shadow:3px 4px 0 var(--shadow)}
+#cardsSheet .cdown{display:none!important}
+/* minhas cartas na tela inicial */
+.mycards{display:flex;flex-direction:column;gap:10px}
+.mch{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.mch h2{margin:0}.mch .hint{margin:3px 0 0;font-size:12.5px}
+.mcrow{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;margin:0 -2px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.mcrow::-webkit-scrollbar{display:none}
+.myc{flex:none;width:132px;scroll-snap-align:start;display:flex;flex-direction:column;gap:6px;padding:0 0 10px;border:1.5px solid var(--edge);border-radius:16px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;overflow:hidden;cursor:pointer;box-shadow:2px 3px 0 var(--shadow);position:relative}
+.myb{display:flex;align-items:center;gap:6px;min-height:44px;padding:6px 8px;background:var(--gc,#3a3a46);color:#fff;border-bottom:1.5px solid var(--edge)}
+.myb b{font-size:13px;line-height:1.1;font-weight:800;text-shadow:0 1px 1px #0006;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.myi{width:26px;height:26px;flex:none;border-radius:8px;background:#fff;display:grid;place-items:center;overflow:hidden;color:#252329}
+.myi svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.myi img,.myi>svg:only-child{max-width:100%;max-height:100%}
+.myr{display:flex;flex-direction:column;padding:0 9px;font:700 15px var(--mono,monospace);letter-spacing:-.3px;white-space:nowrap}
+.myr small{font:700 10px var(--body,system-ui);letter-spacing:.5px;text-transform:uppercase;color:var(--muted);min-height:12px}
+.myh{display:flex;gap:4px;padding:0 9px;font-size:11px;font-weight:800;color:var(--muted)}
+.myh i{width:12px;height:12px;border-radius:3px;border:1.5px solid var(--muted)}
+.myh i.on{background:#3DAA4A;border-color:#252329}
+.myh i.on.hipd{background:repeating-linear-gradient(135deg,#C8C2B4 0 3px,#8E8778 3px 6px)}
+.myh.condo{color:#C8432B}.myh.condo.hipd{color:var(--muted);text-decoration:line-through}
+.myc.hip .myr{color:#6B4A9A;font-size:13px}
+.myc.hip .myb{filter:grayscale(.55)}
+.myw{position:absolute;top:6px;right:6px;font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:99px;background:#FFD12B;color:#252329;border:1px solid #000}
+.myc.paytile .myb{background:#C8432B}.myc.freetile .myb{background:#3a3a46}
+.myc.paytile .myr,.myc.freetile .myr{font:800 13px var(--body,system-ui);letter-spacing:0}
+/* modo leve: nada de animação contínua nem desfoque */
+.lite .b3aura i,.lite .b3aura b{animation:none!important;display:none!important}
+.lite .card::after,.lite .dot.warn,.lite .slide .sl-knob,.lite .c1,.lite .c2{animation:none!important}
+.lite .scrim,.lite .eat,.lite .pf2-overlay,.lite .offer,.lite .bump{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.lite .sheet{will-change:auto}
+.lite .mcard .mglobe{display:none}
+/* brilho e cutucão do "arraste": só algumas vezes (repintar texto sem parar pesa no celular) */
+.slide .sl-txt{animation-iteration-count:2!important}
+.slide:not(.drag):not(.done) .sl-knob{animation-iteration-count:3!important}
+.lite .slide .sl-txt,.lite .slide .sl-knob{animation:none!important}
 </style>
 <link rel="stylesheet" href="porti-status.css">
 </head>
@@ -1308,25 +1405,27 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
     <div style="display:flex;flex-direction:column;gap:24px">
       <div class="cardwrap"><div class="card" id="card"></div><div class="bars" id="bars" hidden><span id="barsLbl">NA CADEIA</span></div></div>
       <div class="banner warn" id="jailBanner" hidden></div>
-      <div class="req" id="reqBox" hidden><h2 id="reqTitle">Pedidos para aprovar</h2><div class="reqlist" id="reqList"></div></div>
+      <div class="req" id="reqBox" hidden><div class="reqlist" id="reqList"></div></div>
       <div class="actions">
         <button class="act primary" id="aPay"><span class="ic"><svg><use href="#i-send"/></svg></span><span><b>Pagar</b><span class="s">Aluguel, compra ou imposto, para alguém ou o banco</span></span></button>
         <button class="act gold" id="aSalary"><span class="ic"><svg><use href="#i-orbit"/></svg></span><span><b id="salaryLbl">+ $200</b><span class="s">Passei pela partida</span></span></button>
         <button class="act" id="aRecv"><span class="ic"><svg><use href="#i-in"/></svg></span><span><b>Receber</b><span class="s">Do banco</span></span></button>
         <button class="act bumpact" id="aBump"><span class="ic"><svg><use href="#i-nfc"/></svg></span><span><b>NFC</b><span class="s">Aproxime do celular de quem vai receber</span></span></button>
       </div>
+      <div class="mycards" id="myCards" hidden><div class="mch"><div><h2>Minhas cartas</h2><p class="hint" id="myCardsSub"></p></div><button class="link" id="myCardsAll" type="button">Ver todas</button></div><div class="mcrow" id="myCardsRow"></div></div>
       <button class="act cardsact" id="aCards" type="button"><span class="ic"><svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="6" width="12" height="15" rx="2" transform="rotate(-8 9 13)"/><rect x="9" y="3" width="12" height="15" rx="2"/><path d="M12 7h6M12 10h4"/></g></svg></span><span><b>Cartas do jogo</b><span class="s" id="cardsSub">Propriedades, casas e hipotecas</span></span></button>
       <div class="banner endb" id="endBanner" hidden><span>🏁 Partida encerrada pelo banqueiro</span><button class="btn small" id="endShow" type="button">Ver resultado</button></div>
       <div class="actions"><button class="act gameact" id="aDice" type="button"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="8.5" cy="8.5" r="1.4" class="f"/><circle cx="15.5" cy="15.5" r="1.4" class="f"/><circle cx="12" cy="12" r="1.4" class="f"/><circle cx="15.5" cy="8.5" r="1.4" class="f"/><circle cx="8.5" cy="15.5" r="1.4" class="f"/></svg></span><span><b>Dados</b><span class="s">Role e veja onde vai parar</span></span></button><button class="act gameact" id="aScore" type="button"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 13v4M8 21h8M9.5 17h5v4h-5z"/></svg></span><span><b>Placar</b><span class="s">Patrimônio de cada um</span></span></button></div>
       <button class="priv" id="photoBtn" type="button"><span class="avatar big" id="photoPrev"></span><span><b>Minha foto</b><span class="s" id="photoSub">Aparece no ranking da mesa. Toque para escolher.</span></span></button>
       <input type="file" id="photoIn" accept="image/*" hidden>
+      <button class="priv" id="liteBtn" role="switch" aria-checked="false" type="button"><svg class="privEye" aria-hidden="true" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span><b>Modo leve (celular lento)</b><span class="s" id="liteSub"></span></span></button>
       <button class="priv" id="privBtn" role="switch" aria-checked="false"><svg class="privEye" id="privEye" aria-hidden="true"><use href="#pe-eye"/></svg><span><b>Esconder meu saldo da mesa</b><span class="s" id="privSub">Os outros jogadores veem seu saldo no ranking</span></span><span class="sw2"></span></button>
       <div class="lapsbox"><h2>Voltas pela partida</h2><p class="hint" id="lapsHint" style="margin:-4px 0 10px"></p><div class="laps" id="laps"></div></div>
       <div><h2>Ranking da mesa</h2><div class="players" id="players"></div>
         <p class="tip" id="swipeTip" hidden><span>Banqueiro: arraste um nome para a <b>direita</b> para dar férias, ou para a <b>esquerda</b> para prender. Faça o mesmo movimento para tirar.</span></p>
-        <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para pagar, receber ou ajustar o saldo por ela daqui.</span></p></div>
+        <p class="tip"><svg><use href="#i-bolt"/></svg><span>Celular de alguém descarregou? Toque no nome da pessoa para lançar por ela. Se não for o banqueiro, quem paga confirma no celular.</span></p></div>
       <div><h2>Extrato da mesa</h2><p class="hint" style="margin:-4px 0 10px">Todos os lançamentos e pedidos da mesa, iguais em todos os celulares.</p><div class="txfilter" id="txFilter"></div><p class="txsum" id="txSum"></p><div class="tx" id="txList"></div><div class="txmore" id="txMore" hidden></div></div>
-      <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Mudar os valores da mesa</button><button class="priv" id="hideRuleBtn" role="switch" aria-checked="true" hidden><span><b>Deixar os jogadores esconderem o saldo</b><span class="s" id="hideRuleSub">Ligado: cada um pode esconder o próprio saldo da mesa.</span></span><span class="sw2"></span></button></div>
+      <div class="bankline"><span id="bankText"></span><button class="btn ghost" id="passBankBtn" hidden>Passar o banco para outro jogador</button><button class="btn ghost" id="valBtn" hidden>Configurações da mesa: valores e rodadas</button><button class="priv" id="hideRuleBtn" role="switch" aria-checked="true" hidden><span><b>Deixar os jogadores esconderem o saldo</b><span class="s" id="hideRuleSub">Ligado: cada um pode esconder o próprio saldo da mesa.</span></span><span class="sw2"></span></button></div>
       <div class="foot">
         <span class="muted num" style="font-size:12.5px" id="rules"></span>
         <span style="display:flex;gap:16px"><button class="link" id="scanBtn2">Escanear outra mesa</button><button class="link" id="switchBtn">Trocar cartão</button><button class="link" id="leaveBtn" style="color:var(--neg)">Sair da mesa</button><button class="link" id="refreshBtn">Atualizar app</button></span>
@@ -1374,8 +1473,8 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
   <div class="sheet-h tsh"><div class="who"><span class="cdic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="6.5" width="11" height="14" rx="2" transform="rotate(-10 9 13.5)"/><rect x="8.5" y="3.5" width="11" height="14" rx="2"/><path d="M11.5 8h5M14 8v6"/></svg></span><div style="min-width:0"><b id="cdTitle">Cartas do jogo</b><small id="cdSub"></small></div></div><button class="xbtn" id="cdClose" type="button" aria-label="Fechar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
   <div class="cddrop" id="cdDrop" hidden><span class="cdhint" id="cdHint"></span><div class="cdppl" id="cdPpl"></div><div class="cdown" id="cdOwn" hidden></div></div>
   <div class="tbody" id="cdBody">
-    <div class="cdboard" id="cdBoardHost"><button class="b3exp" id="b3Expand" type="button"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Expandir</button></div>
-    <div class="fchips" id="cdFilter"></div>
+    <div id="cdFilter"></div>
+    <div id="cdBoardHost"><button class="cdboardbtn" id="b3Expand" type="button"><span class="bi"><svg viewBox="0 0 24 24"><path d="M3 8 12 3l9 5-9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span><span><b>Ver no tabuleiro 3D</b><small>De quem é cada casa, com prédios e fotos</small></span><svg class="go" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
     <div id="cdGroups"></div>
   </div>
 </div>
@@ -1402,7 +1501,7 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
     <button class="pact" data-pa="set" type="button" id="plSet"><b>Ajustar saldo</b><span>Corrigir ou equilibrar quem entrou no meio</span></button>
   </div>
   <div id="plBoss"><h2>Situação no jogo</h2>
-    <div class="jailrow" id="shJail"><button class="btn ghost small" data-sit="preso" type="button"><img class="sticon" src="status-preso.svg" alt="">Cadeia</button><button class="btn ghost small" data-sit="ferias" type="button"><img class="sticon" src="status-ferias.svg" alt="">Férias</button><button class="btn ghost small" data-sit="" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-unlock"/></svg>Soltar</button></div>
+    <div class="plrounds" id="plRounds" hidden></div><div class="jailrow" id="shJail"><button class="btn ghost small" data-sit="preso" type="button"><img class="sticon" src="status-preso.svg" alt="">Cadeia</button><button class="btn ghost small" data-sit="ferias" type="button"><img class="sticon" src="status-ferias.svg" alt="">Férias</button><button class="btn ghost small" data-sit="" type="button"><svg class="sticon" viewBox="0 0 64 72"><use href="#pb-unlock"/></svg>Soltar</button></div>
     <button class="btn ghost" id="shRemove" type="button" hidden>Remover da mesa</button>
   </div>
 </div>
@@ -1424,10 +1523,12 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
 </div>
 <div class="final" id="final" hidden role="dialog" aria-modal="true" aria-labelledby="fnTitle"><div class="finalbox" id="finalIn"></div></div>
 <div class="sheet" id="valSheet" hidden role="dialog" aria-modal="true" aria-labelledby="valTitle">
-  <div class="sheet-h"><b id="valTitle">Valores da mesa</b><button class="link" id="valClose">Cancelar</button></div>
+  <div class="sheet-h"><b id="valTitle">Configurações da mesa</b><button class="link" id="valClose">Cancelar</button></div>
   <p class="muted" style="font-size:14px">Muda o saldo inicial de todos e o valor da partida. Os lançamentos já feitos continuam valendo.</p>
   <label for="vStart">Saldo inicial<input class="inp num" id="vStart" inputmode="numeric"></label>
   <label for="vSalary">Passou pela partida<input class="inp num" id="vSalary" inputmode="numeric"></label>
+  <h2 style="margin:6px 0 -4px">Rodadas sem jogar</h2>
+  <div class="vrounds" id="vRounds"></div>
   <button class="btn" id="valSave">Salvar valores</button>
 </div>
 <div class="sheet" id="bankSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bankTitle">
