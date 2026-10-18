@@ -656,3 +656,115 @@ begin
 end $$;
 notify pgrst, 'reload schema';
 commit;
+
+-- ==================================================================
+-- TROCAS de cartas entre jogadores (proposta → a outra pessoa aceita)
+-- ==================================================================
+begin;
+create table if not exists public.pb_trocas (
+  id          uuid primary key,
+  mesa        text not null references public.pb_mesas(codigo) on delete cascade,
+  de          uuid not null references public.pb_jogadores(id),   -- quem propôs
+  para        uuid not null references public.pb_jogadores(id),   -- quem decide
+  carta_de    smallint references public.pb_cartas(id),           -- carta que quem propôs entrega
+  carta_para  smallint references public.pb_cartas(id),           -- carta que quem decide entrega
+  valor       integer not null default 0,                         -- >0: quem decide paga; <0: quem propôs paga
+  status      text not null default 'aberta',
+  criada_em   timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  constraint pb_troca_status_ck check (status in ('aberta','aceita','recusada','cancelada')),
+  constraint pb_troca_algo_ck check (carta_de is not null or carta_para is not null),
+  constraint pb_troca_valor_ck check (valor between -1000000000 and 1000000000)
+);
+create index if not exists pb_trocas_mesa_idx on public.pb_trocas (mesa, atualizado_em);
+alter table public.pb_trocas enable row level security;
+revoke insert, update, delete, truncate on public.pb_trocas from anon, authenticated;
+grant select on public.pb_trocas to anon, authenticated;
+drop policy if exists "pb leitura" on public.pb_trocas;
+create policy "pb leitura" on public.pb_trocas for select using (true);
+
+create or replace function public.pb_troca(p_id uuid, p_mesa text, p_acao text, p_por uuid, p_para uuid,
+  p_carta_de integer, p_carta_para integer, p_valor integer, p_lanc uuid)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  t pb_trocas%rowtype;
+  v_banq uuid;
+  n1 text; n2 text;
+begin
+  select banqueiro into v_banq from pb_mesas where codigo = p_mesa;
+  if not exists (select 1 from pb_jogadores where id = p_por and mesa = p_mesa and not removido) then
+    raise exception 'Jogador não encontrado nesta mesa.';
+  end if;
+  if p_por <> v_banq and exists (select 1 from pb_jogadores where id = p_por and situacao is not null) then
+    raise exception 'Você está preso ou de férias: só o banqueiro pode mexer agora.';
+  end if;
+
+  if p_acao = 'propor' then
+    if exists (select 1 from pb_trocas where id = p_id) then return; end if;
+    if p_para is null or p_para = p_por or not exists (select 1 from pb_jogadores where id = p_para and mesa = p_mesa and not removido) then
+      raise exception 'Escolha com quem trocar.';
+    end if;
+    if p_carta_de is null and p_carta_para is null then raise exception 'Escolha pelo menos uma carta.'; end if;
+    if p_carta_de is not null and not exists (select 1 from pb_titulos where mesa = p_mesa and carta = p_carta_de and dono = p_por) then
+      raise exception 'Essa carta não é sua.';
+    end if;
+    if p_carta_para is not null and not exists (select 1 from pb_titulos where mesa = p_mesa and carta = p_carta_para and dono = p_para) then
+      raise exception 'Essa carta não é dessa pessoa.';
+    end if;
+    insert into pb_trocas (id, mesa, de, para, carta_de, carta_para, valor)
+    values (p_id, p_mesa, p_por, p_para, p_carta_de, p_carta_para, coalesce(p_valor, 0));
+    return;
+  end if;
+
+  select * into t from pb_trocas where id = p_id and mesa = p_mesa for update;
+  if not found then raise exception 'Troca não encontrada.'; end if;
+  if t.status <> 'aberta' then return; end if;   -- já resolvida (reenvio)
+
+  if p_acao = 'cancelar' then
+    if p_por not in (t.de, v_banq) then raise exception 'Só quem propôs pode cancelar.'; end if;
+    update pb_trocas set status = 'cancelada', atualizado_em = now() where id = p_id;
+  elsif p_acao = 'recusar' then
+    if p_por not in (t.para, v_banq) then raise exception 'Sem permissão.'; end if;
+    update pb_trocas set status = 'recusada', atualizado_em = now() where id = p_id;
+  elsif p_acao = 'aceitar' then
+    if p_por not in (t.para, v_banq) then raise exception 'Só quem recebeu a proposta pode aceitar.'; end if;
+    if t.carta_de is not null and not exists (select 1 from pb_titulos where mesa = p_mesa and carta = t.carta_de and dono = t.de) then
+      update pb_trocas set status = 'cancelada', atualizado_em = now() where id = p_id;
+      return;   -- a carta mudou de dono: a troca cai sozinha
+    end if;
+    if t.carta_para is not null and not exists (select 1 from pb_titulos where mesa = p_mesa and carta = t.carta_para and dono = t.para) then
+      update pb_trocas set status = 'cancelada', atualizado_em = now() where id = p_id;
+      return;
+    end if;
+    if t.carta_de is not null then update pb_titulos set dono = t.para, oferta = null, pedido = null, venda_para = null, venda_preco = null, atualizado_em = now() where mesa = p_mesa and carta = t.carta_de; end if;
+    if t.carta_para is not null then update pb_titulos set dono = t.de, oferta = null, pedido = null, venda_para = null, venda_preco = null, atualizado_em = now() where mesa = p_mesa and carta = t.carta_para; end if;
+    if t.valor <> 0 then
+      select nome into n1 from pb_cartas where id = coalesce(t.carta_de, t.carta_para);
+      insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
+      values (coalesce(p_lanc, gen_random_uuid()), p_mesa,
+              case when t.valor > 0 then t.para else t.de end,
+              case when t.valor > 0 then t.de else t.para end,
+              abs(t.valor), left('Troca: ' || n1, 40), p_por, now(), 'aprovado')
+      on conflict (id) do nothing;
+    end if;
+    update pb_trocas set status = 'aceita', atualizado_em = now() where id = p_id;
+  else
+    raise exception 'Ação inválida.';
+  end if;
+end;
+$$;
+revoke all on function public.pb_troca(uuid, text, text, uuid, uuid, integer, integer, integer, uuid) from public;
+grant execute on function public.pb_troca(uuid, text, text, uuid, uuid, integer, integer, integer, uuid) to anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'pb_trocas') then
+    alter publication supabase_realtime add table public.pb_trocas;
+  end if;
+end $$;
+notify pgrst, 'reload schema';
+commit;

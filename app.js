@@ -61,10 +61,12 @@ function makeApi(){
         if(r.data.length<1000)return out;
       }
     },
+    async trocas(code){const r=await sb.from("pb_trocas").select("*").eq("mesa",code);if(r.error)throw fail(r.error,r.status);return r.data},
     async titulos(code){const r=await sb.from("pb_titulos").select("*").eq("mesa",code);if(r.error)throw fail(r.error,r.status);return r.data},
     subscribe(code,onRow,onStatus){
       const ch=sb.channel("mesa-"+code)
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_titulos",filter:"mesa=eq."+code},p=>p.new&&onRow("tit",p.new))
+        .on("postgres_changes",{event:"*",schema:"public",table:"pb_trocas",filter:"mesa=eq."+code},p=>p.new&&onRow("troca",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_lancamentos",filter:"mesa=eq."+code},p=>p.new&&onRow("lanc",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_jogadores",filter:"mesa=eq."+code},p=>p.new&&onRow("jog",p.new))
         .on("postgres_changes",{event:"*",schema:"public",table:"pb_mesas",filter:"codigo=eq."+code},p=>p.new&&onRow("mesa",p.new))
@@ -252,12 +254,14 @@ const needsApproval=(de,para,por)=>!de&&!!para&&!!banker()&&por!==banker();
 
 /* merged view: server rows + what is still waiting in the queue */
 function derive(){
-  const P={},T={},Tit={};
+  const P={},T={},Tit={},Tr={};
+  for(const[id,x]of Object.entries(L.trocas||(L.trocas={})))Tr[id]={...x};
   for(const[id,p]of Object.entries(L.jog))P[id]={...p};
   for(const[id,t]of Object.entries(L.lanc))T[id]={...t};
   for(const[id,t]of Object.entries(L.tit||(L.tit={})))Tit[id]={...t};
   for(const op of L.out){
     if(op.t==="titulo"){applyTit(Tit,T,op);continue}
+    if(op.t==="troca"){applyTroca(Tr,Tit,T,op);continue}
     if(op.t==="entrar"&&!P[op.id])P[op.id]={id:op.id,nome:op.nome,cor:op.cor,oculto:false,criado_em:op.em,pend:true};
     else if(op.t==="ocultar"&&P[op.id])P[op.id].oculto=op.oculto;
     else if(op.t==="remover"&&P[op.id])P[op.id].removido=true;
@@ -270,7 +274,7 @@ function derive(){
     }
     else if((op.t==="aprovar"||op.t==="recusar")&&T[op.id]&&T[op.id].status==="pendente"){T[op.id].status=op.t==="aprovar"?"aprovado":"recusado";T[op.id].aprovado_por=op.por;T[op.id].stPend=true}
   }
-  return{P,T,Tit};
+  return{P,T,Tit,Tr};
 }
 const counts=t=>!t.estornado_em&&(t.status||"aprovado")==="aprovado";
 function balances(D){
@@ -355,6 +359,22 @@ function groupGap(Tit,c,owner){
   const missing=g.ids.filter(id=>!(Tit[id]&&Tit[id].dono===owner)),hip=g.ids.filter(id=>Tit[id]&&Tit[id].dono===owner&&Tit[id].hipotecada);
   return{ok:!missing.length&&!hip.length,missing,hip};
 }
+
+function applyTroca(Tr,Tit,T,op){
+  if(op.acao==="propor"){if(!Tr[op.id])Tr[op.id]={id:op.id,de:op.por,para:op.para,carta_de:op.carta_de||null,carta_para:op.carta_para||null,valor:op.valor||0,status:"aberta",criada_em:op.em,pend:true};return}
+  const x=Tr[op.id];if(!x||x.status!=="aberta")return;
+  if(op.acao==="cancelar")x.status="cancelada";
+  else if(op.acao==="recusar")x.status="recusada";
+  else if(op.acao==="aceitar"){
+    const okDe=!x.carta_de||(Tit[x.carta_de]&&Tit[x.carta_de].dono===x.de),okPara=!x.carta_para||(Tit[x.carta_para]&&Tit[x.carta_para].dono===x.para);
+    if(!okDe||!okPara){x.status="cancelada";return}
+    if(x.carta_de)Tit[x.carta_de]=Object.assign({},Tit[x.carta_de],{dono:x.para,oferta:null,pedido:null,venda_para:null,venda_preco:null});
+    if(x.carta_para)Tit[x.carta_para]=Object.assign({},Tit[x.carta_para],{dono:x.de,oferta:null,pedido:null,venda_para:null,venda_preco:null});
+    if(x.valor&&T&&!T[op.lanc]){const c=CARDS[x.carta_de||x.carta_para];T[op.lanc]={id:op.lanc,mesa:L.codigo,de:x.valor>0?x.para:x.de,para:x.valor>0?x.de:x.para,valor:Math.abs(x.valor),motivo:("Troca: "+c.nome).slice(0,40),lancado_por:op.por,feito_em:op.em,estornado_em:null,status:"aprovado",pend:true}}
+    x.status="aceita";
+  }
+}
+function trocaOp(acao,o){if(!L||!L.me)return;enqueue(Object.assign({t:"troca",id:o.id||uuid(),acao,por:L.me,em:nowIso(),lanc:uuid()},o))}
 function titOp(carta,acao,para,valor){
   if(!L||!L.me)return;
   const op={t:"titulo",id:uuid(),carta,acao,para:para||null,por:L.me,em:nowIso()};if(valor!=null)op.valor=valor;
@@ -370,6 +390,7 @@ function rentOf(c,t,dice){
 function enqueue(op){L.out.push(op);save();render();setTimeout(syncNow,0)}
 function confirmOp(op){
   if(op.t==="titulo"){applyTit(L.tit||(L.tit={}),L.lanc,op);if(L.lanc[op.id])delete L.lanc[op.id].pend;return}
+  if(op.t==="troca"){applyTroca(L.trocas||(L.trocas={}),L.tit||(L.tit={}),L.lanc,op);if(L.trocas[op.id])delete L.trocas[op.id].pend;if(L.lanc[op.lanc])delete L.lanc[op.lanc].pend;return}
   if(op.t==="entrar"&&!L.jog[op.id]){L.jog[op.id]={id:op.id,mesa:L.codigo,nome:op.nome,cor:op.cor,oculto:false,oculto_em:EPOCH,criado_em:op.em};if(L.mesa&&!L.mesa.banqueiro)L.mesa.banqueiro=op.id}
   else if(op.t==="lancar"&&!L.lanc[op.id])L.lanc[op.id]={id:op.id,mesa:L.codigo,de:op.de,para:op.para,valor:op.valor,motivo:op.motivo||null,lancado_por:op.por,feito_em:op.em,estornado_em:null,estornado_por:null,status:op.status||"aprovado"};
   else if(op.t==="estornar"&&L.lanc[op.id]&&!L.lanc[op.id].estornado_em){
@@ -400,6 +421,7 @@ function sendOp(op){
   if(op.t==="esconder")return API.rpc("pb_mesa_esconder",{p_mesa:L.codigo,p_por:op.por,p_permitido:op.permitido});
   if(op.t==="titulo"){const a={p_id:op.id,p_mesa:L.codigo,p_carta:op.carta,p_acao:op.acao,p_por:op.por,p_para:op.para||null};if(op.valor!=null)a.p_valor=op.valor;return API.rpc("pb_titulo",a)}
   if(op.t==="encerrar")return API.rpc("pb_mesa_encerrar",{p_mesa:L.codigo,p_por:op.por,p_encerrada:op.encerrada});
+  if(op.t==="troca")return API.rpc("pb_troca",{p_id:op.id,p_mesa:L.codigo,p_acao:op.acao,p_por:op.por,p_para:op.para||null,p_carta_de:op.carta_de||null,p_carta_para:op.carta_para||null,p_valor:op.valor||0,p_lanc:op.lanc||null});
   if(op.t==="valores")return API.rpc("pb_mesa_valores",{p_mesa:L.codigo,p_por:op.por,p_saldo_inicial:op.saldo,p_salario:op.salario});
   return Promise.resolve();
 }
@@ -410,7 +432,7 @@ async function flush(cur){
     try{await sendOp(op)}
     catch(e){
       if((op.t==="encerrar"||(op.t==="titulo"&&(op.acao==="pedir"||op.acao==="vender"||op.acao==="aceitar_venda"||op.valor!=null)))&&/inv[aá]lida|p_valor|function|does not exist/i.test(e.message||"")&&L===cur){cur.out.shift();save();toast("Falta o banqueiro rodar o SQL novo no Supabase para isso funcionar.");play("err");continue}
-      if(e.config&&op.t==="titulo"&&L===cur){cur.out.shift();save();toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");play("err");continue}
+      if(e.config&&(op.t==="titulo"||op.t==="troca")&&L===cur){cur.out.shift();save();toast("As cartas ainda não estão ligadas no banco online: falta rodar o SQL novo.");play("err");continue}
       if(e.network||e.config)throw e;
       if(L!==cur)return sent;
       cur.out.shift();save();
@@ -505,7 +527,21 @@ function announce(news){
   }
 }
 let syncing=false,again=false;
-let titOff=false;
+let titOff=false,trocaOff=false;
+function mergeTrocas(rows,notify){
+  if(!L)return;L.trocas=L.trocas||{};
+  for(const r of rows||[]){
+    if(!r||(r.mesa&&r.mesa!==L.codigo))continue;
+    const was=L.trocas[r.id];
+    L.trocas[r.id]={id:r.id,de:r.de,para:r.para,carta_de:r.carta_de||null,carta_para:r.carta_para||null,valor:r.valor||0,status:r.status,criada_em:r.criada_em};
+    if(!notify)continue;
+    if(!was&&r.para===L.me&&r.status==="aberta"){play("ask");try{navigator.vibrate&&navigator.vibrate([80,60,80])}catch(e){}}
+    if(was&&was.status==="aberta"&&r.status!=="aberta"&&r.de===L.me){
+      const nm=nameOf(r.para);
+      if(r.status==="aceita"){play("go");toast(nm+" aceitou a troca!")}else if(r.status==="recusada"){play("undo");toast(nm+" recusou a troca.")}
+    }
+  }
+}
 function mergeTit(rows,notify){
   if(!L)return;L.tit=L.tit||{};
   for(const r of rows||[]){
@@ -534,6 +570,7 @@ async function syncNow(){
     const js=await API.jogadores(cur.codigo);if(L!==cur)return;mergeRows("jog",js,firstSync);
     const ts=await API.lancamentos(cur.codigo,cur.since?cur.since-5000:0);if(L!==cur)return;mergeRows("lanc",ts,firstSync);
     if(API.titulos&&!titOff){try{const tt=await API.titulos(cur.codigo);if(L!==cur)return;mergeTit(tt,firstSync)}catch(e){if(e.config)titOff=true;else throw e}}
+    if(API.trocas&&!trocaOff){try{const tr=await API.trocas(cur.codigo);if(L!==cur)return;mergeTrocas(tr,firstSync)}catch(e){if(e.config)trocaOff=true;else throw e}}
     firstSync=true;save();
     const wasOff=net==="offline";
     setNet("online");
@@ -566,14 +603,14 @@ async function openMesa(code){
   code=String(code).toUpperCase();
   if(unsub){unsub();unsub=null}
   clearTimeout(timer);
-  L=loadMesa(code)||blank(code);L.tit=L.tit||{};titOff=false;
+  L=loadMesa(code)||blank(code);L.tit=L.tit||{};L.trocas=L.trocas||{};titOff=false;trocaOff=false;
   firstSync=!!L.since;forceJoin=false;live=false;net="idle";
   ls.set("pb-ultima",code);setHash(code);
   render();
   if(!API)return;
   if(API.subscribe){
     const cur=L;
-    unsub=API.subscribe(code,(kind,row)=>{if(L===cur){if(kind==="tit"){titOff=false;mergeTit([row],firstSync)}else mergeRows(kind,[row],firstSync);save();render()}},
+    unsub=API.subscribe(code,(kind,row)=>{if(L===cur){if(kind==="tit"){titOff=false;mergeTit([row],firstSync)}else if(kind==="troca"){trocaOff=false;mergeTrocas([row],firstSync)}else mergeRows(kind,[row],firstSync);save();render()}},
       st=>{if(L!==cur)return;const was=live;live=st==="SUBSCRIBED";if(live&&!was)syncNow();schedule()});
   }
   bumpOpen(code);
@@ -633,7 +670,7 @@ function render(){
   if(!$("#sheet").hidden&&D.P[SH.actor])drawSheet();
   if(!$("#plSheet").hidden&&D.P[SH.actor])drawPlayer();
   if(!$("#cardsSheet").hidden&&!cdDrag)drawCards();
-  if(!$("#cardSheet").hidden)drawCard();
+  if(!$("#cardSheet").hidden&&document.activeElement&&document.activeElement.id!=="tpVal")drawCard();
   if(!$("#b3d").hidden&&!b3.ptrs.size)drawBoard3d();
   drawOffer(D);
   drawEnd();
@@ -1545,7 +1582,7 @@ document.addEventListener("pointerup",()=>{if(L&&L.me&&!motionAsked)askMotion()}
 if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission!=="function")askMotion();
 window.__pbBump={knock,bumpIn,setCh:c=>{bumpCh=c},state:()=>({bumpMode,motionOK,lastKnock,recentPeers})};
 /* ================= CARTAS (UI) ================= */
-var ccSale=null,ccSalePrice="",cdOpen=null,cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null;
+var ccSale=null,ccSalePrice="",cdOpen=null,cdFilter="all",cdDrag=null,cdCard=null,ccDice=0,ccPayer=null,ccArm=null,ccSell=null,ccBuild=null,tp={};
 const HOUSE_SVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 7.4 8 2.4l5.8 5v6.2H2.2z"/><path d="M6.4 13.6V10h3.2v3.6"/></svg>';
 const TOWER_SVG='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 14V6h4v8M7 14V2h6v12M2 14h12"/><path d="M9 5h2M9 8h2M9 11h2"/></svg>';
 const GLOBE_SVG='<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/><ellipse cx="50" cy="50" rx="20" ry="46"/><ellipse cx="50" cy="50" rx="38" ry="46"/><path d="M50 4v92M4 50h92M10 28h80M10 72h80"/></svg>';
@@ -1706,11 +1743,12 @@ document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closes
 
 /* one card in detail */
 function openCard(id){
-  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;ccSale=null;ccSalePrice="";
+  cdCard=id;ccDice=0;ccPayer=null;ccArm=null;ccSell=null;ccSale=null;ccSalePrice="";ccBuild=null;tp={dir:"nada",val:0};
   $("#cardSheet").hidden=false;$("#scrim").hidden=false;$("#ccBody").scrollTop=0;drawCard();
 }
 function closeCard(){$("#cardSheet").hidden=true;$("#cardSheet").classList.remove("over3d");if($("#cardsSheet").hidden)$("#scrim").hidden=true}
 $("#ccClose").onclick=closeCard;
+$("#ccBody").addEventListener("input",e=>{if(e.target.id!=="tpVal")return;const raw=e.target.value.replace(/\D/g,"");tp.val=raw?+raw:0;e.target.value=tp.val?"$ "+tp.val.toLocaleString("pt-BR"):"";const c=CARDS[cdCard],D=derive();const el=$("#tpSum");if(el)el.innerHTML=tpSummary(c,D.Tit[c.id]||blankTit(c.id),D)});
 function drawCard(){
   const c=CARDS[cdCard];if(!c)return;
   const D=derive(),t=D.Tit[c.id]||blankTit(c.id),boss=iAmBanker(),me=L.me,owner=t.dono&&D.P[t.dono],mine=t.dono===me;
@@ -1751,10 +1789,13 @@ function drawCard(){
   }
   if(t.dono&&(mine||boss)){
     if(!c.acao){
-      const hs=[1,2,3,4].map(n=>`<i class="${t.casas>=n?"on":""}"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z"/></svg></i>`).join("")+`<i class="cond ${t.casas>=5?"on":""}"><svg viewBox="0 0 24 24"><path d="M4 20V8h7v12M11 20V4h9v16M3 20h18M14 8h3M14 11h3M14 14h3M6.5 11h2M6.5 14h2"/></svg></i>`;
-      const gg=groupGap(D.Tit,c,t.dono),gname=(GRUPOS.find(x=>x.k===c.g)||{}).n||"";
+      const can=!t.hipotecada&&t.casas<5,tgt=can?Math.max(t.casas+1,Math.min(5,ccBuild||t.casas+1)):t.casas,n=tgt-t.casas;
+      const gg=groupGap(D.Tit,c,t.dono),gname=(GRUPOS.find(x=>x.k===c.g)||{}).n||"",pickable=can&&gg.ok;
+      const ic=k=>k<5?'<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z"/></svg>':'<svg viewBox="0 0 24 24"><path d="M4 20V8h7v12M11 20V4h9v16M3 20h18M14 8h3M14 11h3M14 14h3M6.5 11h2M6.5 14h2"/></svg>';
+      const hs=[1,2,3,4,5].map(k=>`<i class="${k===5?"cond ":""}${t.casas>=k?"on":k<=tgt&&pickable?"pick":""}"${pickable&&k>t.casas?` data-lvl="${k}" role="button" aria-label="${k===5?"Até o condomínio":"Até "+k+" casas"}"`:""}>${ic(k)}</i>`).join("");
+      const what=tgt===5&&n===1?"o condomínio":tgt===5?`${n-1} ${n-1===1?"casa":"casas"} + condomínio`:`${n} ${n===1?"casa":"casas"}`;
       a+=tile("Construção",`<div class="chouses">${hs}</div>`+(t.hipotecada?`<p class="ccnote">Pague a hipoteca para voltar a construir.</p>`:!gg.ok&&t.casas<5?`<p class="ccnote grp">${gg.missing.length?`Para construir, junte a cor ${esc(gname.toLowerCase())} inteira. Falta: <b>${gg.missing.map(id=>esc(CARDS[id].nome)+((D.Tit[id]||{}).dono?` (de ${esc(shortName(nameOf(D.Tit[id].dono,D)))})`:" (livre)")).join(", ")}</b>.`:`Pague a hipoteca de <b>${gg.hip.map(id=>esc(CARDS[id].nome)).join(", ")}</b> para construir nesta cor.`}</p>`:t.casas>=5?`<p class="ccnote">Já tem condomínio. Aluguel máximo: ${money(c.al[5])}.</p>`:
-        slide("construir",t.casas===4?"Arraste para construir o condomínio":`Arraste para construir a ${t.casas+1}ª casa`,`Paga ${money(c.casa)} · aluguel vai para ${money(c.al[t.casas+1])}`,"build")));
+        `<p class="ccnote" style="text-align:center">Toque nas casinhas para escolher quantas construir de uma vez.</p>`+slide("construir",`Arraste para construir`,`${what} · paga ${money(c.casa*n)}`,"build",` data-n="${n}"`)+`<p class="ccnote" style="text-align:center">Aluguel vai para <b>${money(c.al[tgt])}</b></p>`));
     }
     a+=tile("Hipoteca",t.hipotecada?slide("resgatar","Arraste para pagar a hipoteca",`Paga ${money(c.hip)} ao banco`,"pay"):slide("hipotecar","Arraste para hipotecar",`Recebe ${money(c.hip)} do banco · para de cobrar aluguel`,"hip"));
     {
@@ -1779,6 +1820,7 @@ function drawCard(){
       ${c.acao?`<div class="dicepick">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button type="button" data-dice="${n}" aria-pressed="${ccDice===n}">${n}</button>`).join("")}</div>`:""}
       ${ccPayer&&val>0?`<div class="slide rent" data-sl="cobrar"><div class="sl-fill"></div><span class="sl-txt">Arraste: ${esc(shortName(nameOf(ccPayer,D)))} paga ${money(val)}<small>para ${esc(owner.nome)}</small></span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>`:`<p class="ccnote">${c.acao&&!ccDice&&ccPayer?"Escolha a soma dos dados.":"Escolha quem caiu aqui."}</p>`}</div>`;
   }
+  h+=tradeTile(c,t,D);
   $("#ccBody").innerHTML=h;
 }
 $("#ccBody").addEventListener("input",e=>{
@@ -1787,6 +1829,16 @@ $("#ccBody").addEventListener("input",e=>{
   const sm=document.querySelector('#ccBody [data-sl="vender"] .sl-txt small');if(sm)sm.textContent=`por ${money(parseAmt(ccSalePrice)||0)} · a pessoa confirma no celular`;
 });
 $("#ccBody").addEventListener("click",e=>{
+  const lv=e.target.closest("[data-lvl]");if(lv){ccBuild=+lv.dataset.lvl;play("tap");drawCard();return}
+  const tb=e.target.closest("[data-tpara],[data-tget],[data-tgive],[data-tdir],[data-tadd],[data-tcancel]");
+  if(tb){const d=tb.dataset;
+    if(d.tpara!==undefined){tp.para=d.tpara;tp.get=null}
+    else if(d.tget!==undefined)tp.get=d.tget?+d.tget:null;
+    else if(d.tgive!==undefined)tp.give=d.tgive?+d.tgive:null;
+    else if(d.tdir!==undefined){tp.dir=d.tdir;if(tp.dir==="nada")tp.val=0}
+    else if(d.tadd!==undefined){const v=+d.tadd;tp.val=v?(tp.val||0)+v:0}
+    else if(d.tcancel){trocaOp("cancelar",{id:d.tcancel});play("undo");toast("Proposta cancelada")}
+    play("tap");drawCard();return}
   const b=e.target.closest("button");if(!b)return;
   const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
   if(b.dataset.offer){ccSell=b.dataset.offer;play("tap");drawCard();return}
@@ -1798,8 +1850,49 @@ $("#ccBody").addEventListener("click",e=>{
 
 });
 
+/* ---- trocas entre jogadores ---- */
+const cardChip=(id,attr,on)=>{const c=CARDS[id];return `<button type="button" class="tchip" ${attr}="${id}" aria-pressed="${on}"><i style="background:${c.acao?"#3a3a46":c.cor}"></i>${esc(c.nome)}</button>`};
+function tpValor(){const v=Math.abs(tp.val||0);return tp.dir==="recebo"?v:tp.dir==="pago"?-v:0}
+function tpSummary(c,t,D){
+  const mine=t.dono===L.me,other=mine?tp.para:t.dono,give=mine?c.id:tp.give,get=mine?tp.get:c.id,v=tpValor();
+  if(!other)return"";
+  const g=[give?CARDS[give].nome:null,v<0?money(-v):null].filter(Boolean).join(" + ")||"nada";
+  const r=[get?CARDS[get].nome:null,v>0?money(v):null].filter(Boolean).join(" + ")||"nada";
+  return `Você entrega: <b>${esc(g)}</b><br>Você recebe: <b>${esc(r)}</b>`;
+}
+function tradeTile(c,t,D){
+  if(!t.dono||!L.me||!D.P[L.me])return"";
+  const mine=t.dono===L.me;
+  const open=Object.values(D.Tr).find(x=>x.status==="aberta"&&x.de===L.me&&(x.carta_de===c.id||x.carta_para===c.id));
+  if(open)return `<div class="ctile"><h4>Proposta de troca enviada</h4><p class="ccnote">Esperando ${esc(nameOf(open.para,D))} responder.</p><button class="btn ghost small" type="button" data-tcancel="${esc(open.id)}">Cancelar proposta</button></div>`;
+  const others=playersArr(D).filter(p=>p.id!==L.me);if(!others.length)return"";
+  const myCards=Object.values(D.Tit).filter(x=>x.dono===L.me&&x.carta!==c.id).map(x=>x.carta);
+  let h=`<div class="ctile"><h4>${mine?"Trocar ou vender a um jogador":"Quero esta carta · propor ao "+esc(shortName(owner(D,t).nome))}</h4>`;
+  if(mine){
+    if(tp.para&&!D.P[tp.para])tp.para=null;
+    h+=`<div class="fchips">${others.map(p=>`<button type="button" data-tpara="${esc(p.id)}" aria-pressed="${tp.para===p.id}">${avatar(p,"sm")}${esc(shortName(p.nome))}</button>`).join("")}</div>`;
+    if(!tp.para)return h+`<p class="ccnote">Escolha com quem negociar.</p></div>`;
+    const theirs=Object.values(D.Tit).filter(x=>x.dono===tp.para).map(x=>x.carta);
+    h+=`<p class="tlab">Em troca, ${esc(shortName(nameOf(tp.para,D)))} te dá alguma carta?</p><div class="fchips"><button type="button" class="tchip" data-tget="" aria-pressed="${!tp.get}">Nenhuma</button>${theirs.map(id=>cardChip(id,"data-tget",tp.get===id)).join("")}</div>`;
+  }else{
+    h+=`<p class="tlab">Você dá alguma carta sua?</p><div class="fchips"><button type="button" class="tchip" data-tgive="" aria-pressed="${!tp.give}">Nenhuma</button>${myCards.map(id=>cardChip(id,"data-tgive",tp.give===id)).join("")}</div>`;
+  }
+  h+=`<p class="tlab">E dinheiro?</p><div class="seg tseg"><button type="button" data-tdir="nada" aria-pressed="${tp.dir==="nada"}">Sem dinheiro</button><button type="button" data-tdir="recebo" aria-pressed="${tp.dir==="recebo"}">Eu recebo</button><button type="button" data-tdir="pago" aria-pressed="${tp.dir==="pago"}">Eu pago</button></div>`;
+  if(tp.dir!=="nada")h+=`<input class="amount tval" id="tpVal" inputmode="numeric" autocomplete="off" placeholder="$ 0" value="${tp.val?"$ "+tp.val.toLocaleString("pt-BR"):""}"><div class="fchips">${[50000,100000,200000,500000].map(v=>`<button type="button" data-tadd="${v}">+${short(v)}</button>`).join("")}<button type="button" data-tadd="0">Limpar</button></div>`;
+  const other=mine?tp.para:t.dono;
+  h+=`<p class="tsum" id="tpSum">${tpSummary(c,t,D)}</p>`;
+  h+=`<div class="slide trade" data-sl="propor"><div class="sl-fill"></div><span class="sl-txt">Arraste para propor a ${esc(shortName(nameOf(other,D)))}<small>a pessoa aceita no celular dela</small></span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div></div>`;
+  return h;
+}
+function owner(D,t){return D.P[t.dono]||{nome:"?"}}
 function ccDo(k,to){
   const c=CARDS[cdCard],D=derive(),t=D.Tit[c.id]||blankTit(c.id);
+  if(k==="propor"){
+    const mine=t.dono===L.me,para=mine?tp.para:t.dono;if(!para)return;
+    if(tp.dir!=="nada"&&!tp.val){toast("Digite o valor da troca ou escolha Sem dinheiro.");play("err");drawCard();return}
+    trocaOp("propor",{para,carta_de:mine?c.id:(tp.give||null),carta_para:mine?(tp.get||null):c.id,valor:tpValor()});
+    play("ask");toast(`Proposta enviada a ${nameOf(para,D)}`);tp={dir:"nada",val:0};drawCard();return;
+  }
   if(k==="cobrar"){
     const v=rentOf(c,t,ccDice);if(!ccPayer||!v)return;
     const r=lancar(ccPayer,t.dono,v,("Aluguel: "+c.nome).slice(0,40));play("pay");
@@ -1813,9 +1906,14 @@ function ccDo(k,to){
   if(k==="pedir"){titOp(c.id,"pedir");play("ask");toast(`Pedido enviado. Esperando o banqueiro autorizar.`);drawCard();return}
   if(k==="autorizar"){if(!t.pedido)return;const who=t.pedido;titOp(c.id,"comprar",who);play("go");toast(`Compra autorizada: ${c.nome} para ${nameOf(who,D)}`);drawCard();return}
   if(k==="ofertar"){if(!to)return;titOp(c.id,"ofertar",to);play("pay");toast(`${c.nome} oferecida a ${nameOf(to,D)}. Esperando confirmar.`);drawCard();return}
+  if(k==="construir"){
+    const tgt=Math.max(t.casas+1,Math.min(5,ccBuild||t.casas+1)),n=tgt-t.casas;ccBuild=null;
+    for(let i=0;i<n;i++)titOp(c.id,"construir");
+    play("pay");toast(tgt===5?`Condomínio em ${c.nome}! Pago ${money(c.casa*n)}`:`${n} ${n===1?"casa construída":"casas construídas"} em ${c.nome} · ${money(c.casa*n)}`);
+    drawCard();return;
+  }
   titOp(c.id,k);
   if(k==="comprar"){play("go");toast(`Você comprou ${c.nome}!`);flashCard()}
-  else if(k==="construir"){play("pay");toast(t.casas===4?`Condomínio em ${c.nome}!`:`Casa construída em ${c.nome}`)}
   else if(k==="hipotecar"){play("recv");toast(`${c.nome} hipotecada: + ${money(c.hip)}`)}
   else if(k==="resgatar"){play("pay");toast(`Hipoteca de ${c.nome} paga`)}
   else if(k==="devolver"){play("undo");toast(`${c.nome} voltou para o banco`)}
@@ -1855,7 +1953,7 @@ document.addEventListener("pointerup",slEnd);document.addEventListener("pointerc
 document.addEventListener("touchmove",e=>{if(slState)e.preventDefault()},{passive:false});
 
 /* someone offered me a card: confirm on my phone */
-let offerShown=null,offerKind=null;const reqSnooze=new Set();
+let offerShown=null,offerKind=null;var offerTrade=null;const reqSnooze=new Set();
 function drawOffer(D){
   const box=$("#offerBox");
   const mine=L&&L.me?Object.values(D.Tit).find(t=>t.oferta===L.me&&!t.dono):null;
@@ -1863,7 +1961,7 @@ function drawOffer(D){
   if(sale){
     const c=CARDS[sale.carta],key="v"+c.id+":"+sale.venda_preco;
     if(offerShown===key&&!box.hidden)return;
-    offerShown=key;offerKind="venda";
+    offerShown=key;offerKind="venda";offerTrade=null;
     const from=D.P[sale.dono]||{nome:"?"},bal=balances(D)[L.me]||0,pr=sale.venda_preco||0;
     $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
       <div class="obody"><p class="oreq">${avatar(from)}<span><b>${esc(from.nome)}</b> quer te vender esta carta</span></p><div class="oprice">${money(pr)}</div>
@@ -1874,10 +1972,23 @@ function drawOffer(D){
   }
   if(!mine){
     const req=L&&L.me&&iAmBanker()?Object.values(D.Tit).find(t=>t.pedido&&!t.dono&&t.pedido!==L.me&&D.P[t.pedido]&&!reqSnooze.has(t.carta+":"+t.pedido)):null;
-    if(!req){box.hidden=true;offerShown=null;offerKind=null;return}
+    if(!req){
+    const tr=L&&L.me?Object.values(D.Tr).filter(x=>x.status==="aberta"&&x.para===L.me&&!x.pend).sort((a,b)=>tms(a.criada_em)-tms(b.criada_em))[0]:null;
+      if(tr){
+      if(offerTrade===tr.id&&!box.hidden)return;
+      offerTrade=tr.id;offerShown=null;offerKind="troca";
+      const card=id=>{const c=CARDS[id];return `<span class="tcard" style="--gc:${c.acao?"#3a3a46":c.cor}"><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></span>`};
+      const get=[tr.carta_de?card(tr.carta_de):"",tr.valor<0?`<span class="tmoney">+ ${money(-tr.valor)}</span>`:""].join("")||'<span class="tmoney none">nada</span>';
+      const give=[tr.carta_para?card(tr.carta_para):"",tr.valor>0?`<span class="tmoney">${money(tr.valor)}</span>`:""].join("")||'<span class="tmoney none">nada</span>';
+      $("#offerIn").innerHTML=`<div class="ccband" style="--gc:#6E3CA8"><div><b>Proposta de troca</b><small>de ${esc(nameOf(tr.de,D))}</small></div></div>
+        <div class="obody"><div class="tswap"><div><h5>Você recebe</h5>${get}</div><div><h5>Você entrega</h5>${give}</div></div>
+        <div class="slide trade" data-sl="aceitar"><div class="sl-fill"></div><span class="sl-txt">Arraste para aceitar a troca</span><div class="sl-knob"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></div></div>
+        <button class="btn ghost small" data-of="recusar_troca">Recusar</button></div>`;
+      box.hidden=false;return;}
+      box.hidden=true;offerShown=null;offerKind=null;offerTrade=null;return}
     const c=CARDS[req.carta],p=D.P[req.pedido],key="r"+c.id+":"+req.pedido;
     if(offerShown===key&&!box.hidden)return;
-    offerShown=key;offerKind="pedido";
+    offerShown=key;offerKind="pedido";offerTrade=null;
     const bal=balances(D)[req.pedido];
     $("#offerIn").innerHTML=`<div class="ccband" style="--gc:${c.acao?"#2A2A33":c.cor}"><div><b>${esc(c.nome)}</b><small>${esc(c.pais)}</small></div></div>
       <div class="obody"><p class="oreq">${avatar(p)}<span><b>${esc(p.nome)}</b> quer comprar esta carta</span></p><div class="oprice">${money(c.preco)}</div>
@@ -1886,6 +1997,7 @@ function drawOffer(D){
       <div class="obtns"><button class="btn ghost small" data-of="recusar" type="button">Recusar</button><button class="btn ghost small" data-of="depois" type="button">Depois</button></div></div>`;
     box.hidden=false;return;
   }
+  offerTrade=null;
   const c=CARDS[mine.carta];
   if(offerShown===c.id&&!box.hidden)return;
   offerShown=c.id;offerKind="oferta";
@@ -1897,6 +2009,8 @@ function drawOffer(D){
   box.hidden=false;
 }
 function offerDo(k){
+  if(offerKind==="troca"&&offerTrade&&(k==="aceitar"||k==="recusar_troca")){const id=offerTrade;offerTrade=null;$("#offerBox").hidden=true;offerKind=null;
+    if(k==="aceitar"){trocaOp("aceitar",{id});play("go");flashCard();toast("Troca feita!")}else{trocaOp("recusar",{id});play("undo");toast("Troca recusada")}return}
   if(offerKind==="venda"){
     const D=derive(),t=Object.values(D.Tit).find(x=>x.venda_para===L.me&&x.dono);$("#offerBox").hidden=true;offerShown=null;
     if(!t){render();return}

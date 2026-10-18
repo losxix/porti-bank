@@ -1168,6 +1168,24 @@ body.cdragging .cdown.over,.cdown.over{border-style:solid;background:color-mix(i
 .oreq b{font-weight:800}
 .obtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @keyframes cdoIn{from{opacity:0;transform:translateY(-6px)}}
+.chouses i[data-lvl]{cursor:pointer}
+.chouses i.pick{border-style:solid;border-color:#252329;background:repeating-linear-gradient(135deg,#FFD12B 0 6px,#ffe58a 6px 12px);color:#252329;transform:translateY(-3px);box-shadow:1px 3px 0 #252329}
+.chouses i{transition:transform .12s,background .12s}
+/* trocas */
+.tlab{margin:2px 0 -2px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.tchip i{width:12px;height:12px;border-radius:4px;border:1.5px solid #252329;flex:none}
+.tseg{grid-template-columns:1fr 1fr 1fr}.tseg button{font-size:13px;min-height:38px}
+.tval{text-align:center;font-size:30px;min-height:52px}
+.tsum{margin:0;padding:10px 12px;border-radius:12px;background:var(--soft);font-size:13px;line-height:1.55}
+.tsum:empty{display:none}
+.slide.trade{--sc:#B48CFF}
+.tswap{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center}
+.tswap h5{margin:0 0 6px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.tswap>div{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.tcard{display:block;padding:10px 6px;border-radius:12px;border:1.5px solid #252329;background:linear-gradient(180deg,color-mix(in oklab,var(--gc) 85%,#fff),var(--gc));color:#fff;text-shadow:0 1px 1px #0006;box-shadow:1px 2px 0 #252329}
+.tcard b{display:block;font-size:13.5px;text-transform:uppercase}.tcard small{font-size:10.5px;font-weight:700;opacity:.9}
+.tmoney{display:block;padding:8px;border-radius:12px;background:var(--soft);font-family:var(--mono);font-weight:600;font-size:15px}
+.tmoney.none{font-family:var(--body);font-weight:700;color:var(--muted)}
 </style>
 <link rel="stylesheet" href="porti-status.css">
 </head>
