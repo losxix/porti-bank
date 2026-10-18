@@ -768,3 +768,74 @@ begin
 end $$;
 notify pgrst, 'reload schema';
 commit;
+
+-- ==================================================================
+-- HIPOTECA DAS CONSTRUÇÕES: cada casa (ou o condomínio) hipotecada rende
+-- metade do que custou e sai do aluguel até pagar a hipoteca de volta.
+-- ==================================================================
+begin;
+alter table public.pb_titulos add column if not exists casas_hip smallint not null default 0;
+
+create or replace function public.pb_titulos_casas_hip_ok()
+returns trigger language plpgsql as $$
+begin
+  if new.dono is null then new.casas_hip := 0; end if;
+  new.casas_hip := least(greatest(coalesce(new.casas_hip, 0), 0), new.casas);
+  return new;
+end;
+$$;
+drop trigger if exists pb_titulos_casas_hip_ok on public.pb_titulos;
+create trigger pb_titulos_casas_hip_ok before insert or update on public.pb_titulos
+  for each row execute function public.pb_titulos_casas_hip_ok();
+
+create or replace function public.pb_casas_hip(p_id uuid, p_mesa text, p_carta integer, p_acao text, p_por uuid, p_n integer)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  c pb_cartas%rowtype;
+  t pb_titulos%rowtype;
+  v_boss boolean;
+  v_n integer;
+  v_val integer;
+begin
+  if exists (select 1 from pb_lancamentos where id = p_id) then return; end if;   -- reenvio
+  select * into c from pb_cartas where id = p_carta;
+  if not found then raise exception 'Carta inválida.'; end if;
+  if c.casa = 0 then raise exception 'Ações não têm casas.'; end if;
+  select * into t from pb_titulos where mesa = p_mesa and carta = p_carta for update;
+  if not found or t.dono is null then raise exception '% não tem dono.', c.nome; end if;
+  if not exists (select 1 from pb_jogadores where id = p_por and mesa = p_mesa and not removido) then
+    raise exception 'Jogador não encontrado nesta mesa.';
+  end if;
+  v_boss := p_por = (select banqueiro from pb_mesas where codigo = p_mesa);
+  if not v_boss and exists (select 1 from pb_jogadores where id = p_por and situacao is not null) then
+    raise exception 'Você está preso ou de férias: só o banqueiro pode mexer agora.';
+  end if;
+  if not (v_boss or t.dono = p_por) then raise exception 'Só o dono ou o banqueiro.'; end if;
+  if p_n is null or p_n < 1 then raise exception 'Escolha quantas casas.'; end if;
+
+  if p_acao = 'hipotecar' then
+    v_n := least(p_n, t.casas - t.casas_hip);
+    if v_n < 1 then raise exception 'Não há casas livres para hipotecar em %.', c.nome; end if;
+    v_val := v_n * round(c.casa / 2.0)::integer;
+    update pb_titulos set casas_hip = casas_hip + v_n, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status, aprovado_por, aprovado_em)
+    values (p_id, p_mesa, null, t.dono, v_val, left('Hipoteca de casas: ' || c.nome, 40), p_por, now(), 'aprovado', p_por, now());
+  elsif p_acao = 'resgatar' then
+    v_n := least(p_n, t.casas_hip);
+    if v_n < 1 then raise exception 'Nenhuma casa hipotecada em %.', c.nome; end if;
+    v_val := v_n * round(c.casa / 2.0)::integer;
+    update pb_titulos set casas_hip = casas_hip - v_n, atualizado_em = now() where mesa = p_mesa and carta = p_carta;
+    insert into pb_lancamentos (id, mesa, de, para, valor, motivo, lancado_por, feito_em, status)
+    values (p_id, p_mesa, t.dono, null, v_val, left('Fim hip. casas: ' || c.nome, 40), p_por, now(), 'aprovado');
+  else
+    raise exception 'Ação inválida.';
+  end if;
+end;
+$$;
+revoke all on function public.pb_casas_hip(uuid, text, integer, text, uuid, integer) from public;
+grant execute on function public.pb_casas_hip(uuid, text, integer, text, uuid, integer) to anon, authenticated;
+notify pgrst, 'reload schema';
+commit;
